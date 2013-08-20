@@ -2,27 +2,27 @@
 module Main where
 
 import qualified Graphics.UI.SDL as SDL
+import qualified Graphics.UI.SDL.Image as SDLI
 import Control.Lens
-
 import Control.Monad
 import Control.Monad.State
 import Control.Applicative
-import Control.Monad.IO.Class
-import Data.IORef
 
 import qualified Player
 
 data GameFrame = GameFrame {
   _screenMode :: Int,
-  _player :: Player.Player
-  } deriving (Eq, Show)
+  _player :: Player.Player,
+  _screen :: IO SDL.Surface
+  }
 
 makeLenses ''GameFrame
 
 initGameFrame :: GameFrame
-initGameFrame = GameFrame { 
+initGameFrame = GameFrame {
   _screenMode = 0,
-  _player = Player.initPlayer
+  _player = Player.initPlayer,
+  _screen = SDL.getVideoSurface
   }
 
 start :: IO ()
@@ -35,10 +35,13 @@ run :: IO GameFrame -> IO ()
 run gfIO = do
   gf <- gfIO
   let gf' = mainloop gf
-  step >>= flip unless (run gf')
+  (gf ^. screen) >>= step >>= flip unless (run gf')
+
+step :: SDL.Surface -> IO Bool
+step screen = fmap and . sequence $
+  [SDL.tryFlip screen,
+  SDL.pollEvent >>= (\ev -> return $ isQuit ev)]
   
-step :: IO Bool
-step = SDL.pollEvent >>= (\ev -> return $ isQuit ev)
   where
     isQuit :: SDL.Event -> Bool
     isQuit (SDL.KeyDown keysym) = SDL.symKey keysym == SDL.SDLK_ESCAPE
@@ -47,7 +50,8 @@ step = SDL.pollEvent >>= (\ev -> return $ isQuit ev)
 
 mainloop :: GameFrame -> IO GameFrame
 mainloop gf = do
-  Player.draw $ gf ^. player
+  screen <- gf ^. screen
+  Player.draw screen (gf ^. player)
   return $ player %~ Player.update $ gf
 
 end :: IO ()
