@@ -1,7 +1,8 @@
-{-# LANGUAGE RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Global where
 
-import Graphics.UI.SDL.Rect as SDLR
+import qualified Graphics.UI.SDL as SDL
+import qualified Graphics.UI.SDL.Image as SDLI
 import Control.Lens
 import Control.Applicative
 
@@ -24,5 +25,25 @@ type Pos = Point Int
 toNum :: (Num a) => Pos -> Point a
 toNum = mapp fromIntegral
 
-center :: Rect -> Pos
-center r = (rectX r, rectY r) $+ (mapp floor $ (-1/2) $* toNum (rectW r, rectH r))
+center :: SDL.Rect -> Pos
+center r = (SDL.rectX r, SDL.rectY r) $+ 
+           (mapp floor $ (-1/2) $* toNum (SDL.rectW r, SDL.rectH r))
+
+data Pic = Pic {
+  _raw :: [SDL.Surface],
+  _playerImg :: SDL.Surface,
+  _shotImg :: SDL.Surface
+  }
+
+makeLenses ''Pic
+
+initPic :: IO Pic
+initPic = do 
+  r1 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/player_reimu.png"
+  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/Reimu_shots.png"
+
+  return $ Pic {
+    _raw = [r1, r2],
+    _playerImg = undefined,
+    _shotImg = undefined
+  }

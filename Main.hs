@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, ImplicitParams #-}
 module Main where
 
 import qualified Graphics.UI.SDL as SDL
@@ -8,14 +8,19 @@ import Control.Monad
 import Control.Monad.State
 import Control.Applicative
 
+import Global
 import qualified Player
 import qualified Key
+import qualified Bullet
+import Debug.Trace
 
 data GameFrame = GameFrame {
   _screenMode :: Int,
   _player :: Player.Player,
   _screen :: IO SDL.Surface,
-  _key :: Key.Keys
+  _key :: Key.Keys,
+  _bullet :: Bullet.Bullet,
+  _pic :: Pic
   }
 
 makeLenses ''GameFrame
@@ -25,7 +30,9 @@ initGameFrame = GameFrame {
   _screenMode = 0,
   _player = Player.initPlayer,
   _screen = SDL.getVideoSurface,
-  _key = Key.initKeys
+  _key = Key.initKeys,
+  _bullet = Bullet.initBullet,
+  _pic = undefined
   }
 
 start :: IO ()
@@ -35,7 +42,7 @@ start = do
   SDL.setCaption "Chimera" "chimera"
   SDL.enableKeyRepeat 1 10
   return ()
-
+  
 run :: IO GameFrame -> IO ()
 run gfIO = do
   gf <- gfIO
@@ -68,14 +75,36 @@ mainloop gf = do
   screen <- gf ^. screen
   key' <- Key.update $ gf ^. key
   
-  Player.draw screen (gf ^. player)
+  Player.draw screen (gf ^. pic ^. playerImg) (gf ^. player)
+  Bullet.draw screen (gf ^. pic ^. shotImg) (gf ^. bullet)
   
-  return $ 
+  return $
     key .~ key' $
     player %~ Player.update key' $ 
+    bullet %~ Bullet.update key' $
     gf
 
 end :: IO ()
 end = SDL.quit
 
-main = start >> run (return initGameFrame) >> end
+main :: IO ()
+main = do
+  start
+  pic' <- load
+  run (return $
+       pic .~ pic' $
+       initGameFrame)
+  end
+  
+  where
+    load :: IO Pic
+    load = do
+      p <- initPic
+      let [r1,r2] = p ^. raw
+      SDL.setClipRect r1 (Just $ SDL.Rect 0 0 50 50)
+      SDL.setClipRect r2 (Just $ SDL.Rect 0 0 16 72)
+  
+      return $
+        playerImg .~ r1 $
+        shotImg .~ r2 $
+        p

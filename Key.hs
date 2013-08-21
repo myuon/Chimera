@@ -18,13 +18,14 @@ data Keys = Keys {
   _up :: Int,
   _down :: Int,
   _right :: Int,
-  _left :: Int
+  _left :: Int,
+  _z :: Int
   } deriving Show
 
 makeLenses ''Keys
 
 initKeys :: Keys
-initKeys = Keys 0 0 0 0 0
+initKeys = Keys 0 0 0 0 0 0
 
 initSpKeys :: SDL.SDLKey -> Keys
 initSpKeys SDL.SDLK_SPACE = space .~ 1 $ initKeys
@@ -32,6 +33,7 @@ initSpKeys SDL.SDLK_UP    = up    .~ 1 $ initKeys
 initSpKeys SDL.SDLK_DOWN  = down  .~ 1 $ initKeys
 initSpKeys SDL.SDLK_RIGHT = right .~ 1 $ initKeys
 initSpKeys SDL.SDLK_LEFT  = left  .~ 1 $ initKeys
+initSpKeys SDL.SDLK_x     = z     .~ 1 $ initKeys
 initSpKeys _ = initKeys
 
 plusKeys :: Keys -> Keys -> Keys
@@ -41,6 +43,7 @@ plusKeys k k' =
   down  .~ (k ^.  down) + (k' ^.  down) $
   right .~ (k ^. right) + (k' ^. right) $
   left  .~ (k ^.  left) + (k' ^.  left) $
+  z     .~ (k ^.     z) + (k' ^.     z) $
   initKeys
 
 foreign import ccall unsafe "SDL_GetKeyState" sdlGetKeyState :: Ptr CInt -> IO (Ptr Word8)
@@ -73,6 +76,7 @@ update keys = do
       down  %~ keyFun (k ^.  down) $
       right %~ keyFun (k ^. right) $
       left  %~ keyFun (k ^.  left) $
+      z     %~ keyFun (k ^.     z) $
       keys
   
       where
