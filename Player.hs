@@ -15,25 +15,31 @@ import qualified Key
 
 data Player = Player {
   _pos :: Pos,
-  _sp :: Int
+  _speed :: Int,
+  _counter :: Int
   }
 
 makeLenses ''Player
 
 initPlayer :: Player
 initPlayer = Player {
-  _pos = (0,0),
-  _sp = 2
+  _pos = (320, 180),
+  _speed = 2,
+  _counter = 0
   }
 
 update :: Key.Keys -> Player -> Player
 update key = execState $ do
+  updateCounter
   updatePos key
+  
+updateCounter :: State Player ()
+updateCounter = counter %= (+1)
 
 updatePos :: Key.Keys -> State Player ()
 updatePos key = do
   (x,y) <- use pos
-  k <- use sp
+  k <- use speed
   pos .= (x,y) $+ (k $* (dx,dy))
   pos %= clamp
   
@@ -68,5 +74,3 @@ draw screen img p = do
     img (Just $ SDL.Rect 0 0 50 50)
     screen (Just $ SDL.Rect x y 50 50)
   return ()
-
-

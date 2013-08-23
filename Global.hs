@@ -25,6 +25,9 @@ type Pos = Point Int
 toNum :: (Num a) => Pos -> Point a
 toNum = mapp fromIntegral
 
+fromPolar :: (Floating a) => (a,a) -> Point a
+fromPolar (r,t) = r $* (cos t, -sin t)
+
 center :: SDL.Rect -> Pos
 center r = (SDL.rectX r, SDL.rectY r) $+ 
            (mapp floor $ (-1/2) $* toNum (SDL.rectW r, SDL.rectH r))
@@ -40,7 +43,7 @@ makeLenses ''Pic
 initPic :: IO Pic
 initPic = do 
   r1 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/player_reimu.png"
-  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/Reimu_shots.png"
+  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/_shot3.png"
 
   return $ Pic {
     _raw = [r1, r2],
