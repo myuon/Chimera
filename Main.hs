@@ -11,7 +11,7 @@ import Control.Applicative
 import Global
 import qualified Player
 import qualified Key
-import qualified Bullet
+import qualified Field
 import Debug.Trace
 
 data GameFrame = GameFrame {
@@ -19,7 +19,7 @@ data GameFrame = GameFrame {
   _player :: Player.Player,
   _screen :: IO SDL.Surface,
   _key :: Key.Keys,
-  _bullet :: Bullet.Bullet,
+  _field :: Field.Field,
   _pic :: Pic
   }
 
@@ -31,7 +31,7 @@ initGameFrame = GameFrame {
   _player = Player.initPlayer,
   _screen = SDL.getVideoSurface,
   _key = Key.initKeys,
-  _bullet = Bullet.initBullet,
+  _field = Field.initField,
   _pic = undefined
   }
 
@@ -76,12 +76,12 @@ mainloop gf = do
   key' <- Key.update $ gf ^. key
   
   Player.draw screen (gf ^. pic ^. playerImg) (gf ^. player)
-  Bullet.draw screen (gf ^. pic ^. shotImg) (gf ^. bullet)
+  Field.draw screen (gf ^. pic ^. shotImg) (gf ^. field)
   
   return $
     key .~ key' $
     player %~ Player.update key' $ 
-    bullet %~ Bullet.update key' $
+    field %~ Field.update key' $
     gf
 
 end :: IO ()
