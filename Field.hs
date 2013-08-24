@@ -36,11 +36,11 @@ updateBullet = do
 drawBullet :: SDL.Surface -> [SDL.Surface] -> Bullet -> IO ()
 drawBullet screen [imgB1] s = do
   let (px,py) = toPos $ s ^. pos
-  let (x,y) = center $ SDL.Rect px py 10 10
+--  let (x,y) = center $ SDL.Rect px py 10 10
   
   SDL.blitSurface
     (imgB1) (Just $ SDL.Rect 85 40 10 10)
-    screen (Just $ SDL.Rect x y 10 10)
+    screen (Just $ SDL.Rect px py 10 10)
   return ()
 
 data EnemyKind = Oneway
@@ -78,7 +78,7 @@ addShot e p = bool id (spiral:) (e^.(chara . Player.counter) `mod` 1 == 0) $ []
                                             (fromIntegral $ posP^._1 - posE^._1))
 
     spiral :: Bullet
-    spiral = Bullet (toNum posE) 0.15 $ (fromIntegral $ e^.(chara . Player.counter)) / 10
+    spiral = Bullet (toNum posE) 0.05 $ (fromIntegral $ e^.(chara . Player.counter)) / 10
 
 drawEnemy :: SDL.Surface -> SDL.Surface -> Enemy -> IO ()
 drawEnemy screen img e = do

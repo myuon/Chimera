@@ -1,4 +1,7 @@
 *.o
 *.hi
+*.-auto-all
+*.-rtsopts
 *~
+*.prof
 Main
