@@ -13,20 +13,29 @@ import Debug.Trace
 import Global
 import qualified Key
 
-data Player = Player {
+data Chara = Chara {
   _pos :: Pos,
   _speed :: Int,
   _counter :: Int
   }
 
-makeLenses ''Player
+makeLenses ''Chara
 
-initPlayer :: Player
-initPlayer = Player {
+initChara :: Chara
+initChara = Chara {
   _pos = (320, 180),
   _speed = 2,
   _counter = 0
   }
+
+data Player = Player {
+  _chara :: Chara
+  }
+
+makeLenses ''Player
+
+initPlayer :: Player
+initPlayer = Player initChara
 
 update :: Key.Keys -> Player -> Player
 update key = execState $ do
@@ -34,14 +43,14 @@ update key = execState $ do
   updatePos key
   
 updateCounter :: State Player ()
-updateCounter = counter %= (+1)
+updateCounter = chara.counter %= (+1)
 
 updatePos :: Key.Keys -> State Player ()
 updatePos key = do
-  (x,y) <- use pos
-  k <- use speed
-  pos .= (x,y) $+ (k $* (dx,dy))
-  pos %= clamp
+  (x,y) <- use (chara.pos)
+  k <- use (chara.speed)
+  (chara.pos) .= (x,y) $+ (k $* (dx,dy))
+  (chara.pos) %= clamp
   
   where
     (dx,dy) =
@@ -67,7 +76,7 @@ clamp = edgeX *** edgeY
 
 draw :: SDL.Surface -> SDL.Surface -> Player -> IO ()
 draw screen img p = do
-  let (px,py) = p ^. pos
+  let (px,py) = p ^. (chara.pos)
   let (x,y) = center $ SDL.Rect px py 50 50
   
   SDL.blitSurface 

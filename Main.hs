@@ -74,19 +74,19 @@ step screen =
 
 mainloop :: GameFrame -> IO GameFrame
 mainloop gf = do
-  SDL.delay 1
+--  SDL.delay 1
   
   fps' <- SDL.getTicks
-  delayFPS 60 (fps' - (gf ^. fps))
+--  delayFPS 60 (fps' - (gf ^. fps))
   
   screen <- gf ^. screen
   key' <- Key.update $ gf ^. key
   
-  Player.draw screen (gf ^. pic ^. playerImg) (gf ^. player)
-  Field.draw screen (gf ^. pic ^. shotImg) (gf ^. field)
+  Player.draw screen (fst $ gf ^. pic ^. charaImg) (gf ^. player)
+  Field.draw screen (snd $ gf ^. pic ^. charaImg) (gf ^. pic ^. shotImg) (gf ^. field)
   
---  SDL.setCaption ("Chimera "++(show $ getFPS fps' (gf ^. fps))++":" ++ (show $ length (gf ^. field ^. Field.bullet))) "chimera"
-  SDL.setCaption ("Chimera:"++(show $ length (gf ^. field ^. Field.bullet))) "chimera"
+  SDL.setCaption ("Chimera "++(show $ getFPS fps' (gf ^. fps))++":" ++ (show $ length (gf ^. field ^. Field.bulletE))) "chimera"
+--  SDL.setCaption ("Chimera:"++(show $ length (gf ^. field ^. Field.bulletE))) "chimera"
 
   return $
     fps .~ fps' $
@@ -121,11 +121,23 @@ main = do
     load :: IO Pic
     load = do
       p <- initPic
-      let [r1,r2] = p ^. raw
-      SDL.setClipRect r1 (Just $ SDL.Rect 0 0 50 50)
-      SDL.setClipRect r2 (Just $ SDL.Rect 0 0 20 20)
-  
+      let [r1,r2,r3] = p ^. raw
+      
+--      c1 <- makeImgSurface (50,50) r1 (SDL.Rect 0 0 50 50)
+--      c2 <- makeImgSurface (32,32) r3 (SDL.Rect 0 0 32 32)
+--      s1 <- makeImgSurface (20,20) r2 (SDL.Rect 0 0 20 20)
+--      s2 <- makeImgSurface (20,20) r2 (SDL.Rect 0 100 20 20)
+      
       return $
-        playerImg .~ r1 $
-        shotImg .~ r2 $
+        charaImg .~ (r1, r3) $
+        shotImg .~ ([r2], [r2]) $
         p
+        
+    makeImgSurface :: (Int, Int) -> SDL.Surface -> SDL.Rect -> IO SDL.Surface
+    makeImgSurface (w,h) img r = do
+      s <- SDL.createRGBSurfaceEndian [SDL.SrcAlpha] w h 32
+      SDL.blitSurface
+        img (Just r)
+        s (Just $ SDL.Rect 0 0 w h)
+      s' <- SDL.displayFormatAlpha s
+      return $ s'
