@@ -4,6 +4,7 @@ module Global where
 import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL.Image as SDLI
 import Control.Lens
+import Control.Arrow
 import Control.Monad.State
 
 type Point a = (a,a)
@@ -19,6 +20,9 @@ mapp f (a,b) = (a,b) & both %~ f
 
 ($*) :: (Num a) => a -> Point a -> Point a
 ($*) k = mapp (*k)
+
+abss :: (Num a) => Point a -> a
+abss (a,b) = a * a + b * b
 
 type Pos = Point Int
 

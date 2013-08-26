@@ -19,7 +19,6 @@ import Debug.Trace
 
 data GameFrame = GameFrame {
   _screenMode :: Int,
-  _player :: Player.Player,
   _screen :: IO SDL.Surface,
   _key :: Key.Keys,
   _field :: Field.Field,
@@ -32,7 +31,6 @@ makeLenses ''GameFrame
 initGameFrame :: GameFrame
 initGameFrame = GameFrame {
   _screenMode = 0,
-  _player = Player.initPlayer,
   _screen = SDL.getVideoSurface,
   _key = Key.initKeys,
   _field = Field.initField,
@@ -80,8 +78,7 @@ mainloop gf = do
   screen <- gf ^. screen
   key' <- Key.update $ gf ^. key
   
-  Player.draw screen (fst $ gf ^. pic ^. charaImg) (gf ^. player)
-  Field.draw screen (snd $ gf ^. pic ^. charaImg) (gf ^. pic ^. shotImg) (gf ^. field)
+  Field.draw screen (gf ^. pic ^. charaImg) (gf ^. pic ^. shotImg) (gf ^. field)
   
   SDLF.delay (gf ^. fps)
   fps <- SDLF.get (gf ^. fps)
@@ -89,14 +86,9 @@ mainloop gf = do
 
   return $
     key .~ key' $
-    field %~ Field.update key' (gf ^. player) $
-    player %~ Player.update key' $ 
+    field %~ Field.update key' $
     gf
   
-  where
-    getFPS :: Word32 -> Word32 -> Int
-    getFPS f f' = floor $ (1000 / fromIntegral (f - f'))
-    
 end :: IO ()
 end = SDL.quit
 

@@ -16,7 +16,8 @@ import qualified Key
 data Chara = Chara {
   _pos :: Pos,
   _speed :: Int,
-  _counter :: Int
+  _counter :: Int,
+  _hp :: Int
   }
 
 makeLenses ''Chara
@@ -25,7 +26,8 @@ initChara :: Chara
 initChara = Chara {
   _pos = (320, 180),
   _speed = 2,
-  _counter = 0
+  _counter = 0,
+  _hp = 10
   }
 
 data Player = Player {
@@ -47,13 +49,13 @@ updateCounter = chara.counter %= (+1)
 
 updatePos :: Key.Keys -> State Player ()
 updatePos key = do
-  (x,y) <- use (chara.pos)
   k <- use (chara.speed)
-  (chara.pos) .= (x,y) $+ (k $* (dx,dy))
+  (chara.pos) %= ($+ (k $* dir))
   (chara.pos) %= clamp
   
   where
-    (dx,dy) =
+    dir :: (Int, Int)
+    dir =
       addTup (key ^. Key.up    > 0) (0,-1) $
       addTup (key ^. Key.down  > 0) (0,1) $
       addTup (key ^. Key.right > 0) (1,0) $
@@ -62,7 +64,7 @@ updatePos key = do
 
     addTup :: Bool -> Pos -> Pos -> Pos
     addTup b p q = bool q (p$+q) b
-    
+
 clamp :: Pos -> Pos
 clamp = edgeX *** edgeY
   where
