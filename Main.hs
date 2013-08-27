@@ -10,6 +10,7 @@ import Control.Monad.State
 import Control.Applicative
 import Control.Bool
 
+import qualified Data.Time as Time
 import Data.Word (Word32)
 import Global
 import qualified Player
@@ -73,6 +74,7 @@ step screen =
 
 mainloop :: GameFrame -> IO GameFrame
 mainloop gf = do
+  time <- Time.getCurrentTime
   SDL.delay 1
   
   screen <- gf ^. screen
@@ -81,14 +83,18 @@ mainloop gf = do
   Field.draw screen (gf ^. pic ^. charaImg) (gf ^. pic ^. shotImg) (gf ^. field)
   
   SDLF.delay (gf ^. fps)
-  fps <- SDLF.get (gf ^. fps)
-  SDL.setCaption ("Chimera "++(show $ fps)++":" ++ (show $ length (gf ^. field ^. Field.bulletE))) "chimera"
-
+  time' <- Time.getCurrentTime
+  SDL.setCaption ("Chimera "++(show $ (getFPS $ Time.diffUTCTime time' time))++":" ++ (show $ length (gf ^. field ^. Field.bulletE))) "chimera"
+  
   return $
     key .~ key' $
     field %~ Field.update key' $
     gf
-  
+    
+  where
+    getFPS :: (RealFrac a, Fractional a) => a -> Int
+    getFPS diff = floor $ (1 / diff)
+
 end :: IO ()
 end = SDL.quit
 
