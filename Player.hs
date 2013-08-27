@@ -4,7 +4,6 @@ module Player where
 import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL.Image as SDLI
 import Graphics.UI.SDL.Rect as SDLR
-import Control.Bool
 import Control.Lens
 import Control.Arrow
 import Control.Monad.State

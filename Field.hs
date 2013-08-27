@@ -4,7 +4,6 @@ module Field where
 
 import qualified Graphics.UI.SDL as SDL
 import qualified Graphics.UI.SDL.Image as SDLI
-import Control.Bool
 import Control.Lens
 import Control.Arrow
 import Control.Monad
@@ -37,25 +36,39 @@ drawBullet screen [imgB1] s = do
 updateEnemy :: Player -> State Enemy ()
 updateEnemy p = do
   enemy <- get
-  shotQ .= addShot enemy p
-
+  pos %= move (enemy ^. motion) ((enemy ^. speed) $* (0,1)) (enemy ^. counter)
+  shotQ .= if (enemy ^. mstate == Stay) then addShot enemy p else []
   counter %= (+1)
-
-addShot :: Enemy -> Player -> [Bullet]
-addShot e p = case (e ^. kind) of 
-  Spiral -> bool id (spiral:) (e ^. counter `mod` 1 == 0) $ []
-  Oneway -> bool id (toPlayer:) (e ^. counter `mod` 50 == 0) $ []
+  mstate %= checkState (enemy ^. motion) enemy
   where
-    posE = e ^. pos
-    posP = p ^. pos
-    
-    spiral :: Bullet
-    spiral = initBullet posE 0.15 $ (fromIntegral $ e^. (chara . counter)) / 10
+    move :: Motion -> Pos -> Int -> Pos -> Pos
+    move (Mono go stay) v cnt
+      | cnt < go = ($+) v
+      | go <= cnt && cnt < go + stay = id
+      | go + stay <= cnt = \p -> p $- v
 
-    toPlayer :: Bullet
-    toPlayer = 
-      initBullet posE 2 (atan2 (posE ^. _2 - posP ^. _2)
-                               (posP ^. _1 - posE ^. _1))
+    checkState :: Motion -> Enemy -> MotionState -> MotionState
+    checkState (Mono go stay) e
+      | e ^. counter == go = const Stay
+      | e ^. counter == go + stay = const Back
+      | go + stay < e ^. counter && not (isInside (e ^. pos)) = const Dead 
+      | otherwise = id
+
+    addShot :: Enemy -> Player -> [Bullet]
+    addShot e p = case (e ^. kind) of 
+      Spiral -> bool id (spiral:) (e ^. counter `mod` 1 == 0) $ []
+      Oneway -> bool id (toPlayer:) (e ^. counter `mod` 50 == 0) $ []
+      where
+        posE = e ^. pos
+        posP = p ^. pos
+        
+        spiral :: Bullet
+        spiral = initBullet posE 0.15 $ (fromIntegral $ e^. (chara . counter)) / 10
+
+        toPlayer :: Bullet
+        toPlayer = 
+          initBullet posE 2 (atan2 (posE ^. _2 - posP ^. _2)
+                                   (posP ^. _1 - posE ^. _1))
 
 drawEnemy :: SDL.Surface -> SDL.Surface -> Enemy -> IO ()
 drawEnemy screen img e = do
@@ -74,7 +87,8 @@ data Field = Field {
   _player :: Player,
   _enemy :: [Enemy],
   _bulletP :: [Bullet],
-  _bulletE :: [Bullet]
+  _bulletE :: [Bullet],
+  _enemyQ :: [(Int, Enemy)]
   }
 
 makeLenses ''Field
@@ -82,10 +96,12 @@ makeLenses ''Field
 initField :: Field
 initField = Field {
   _player = initPlayer,
-  _enemy = [initEnemy (320, 50) 1 20 Oneway,
-            initEnemy (120, 90) 1 20 Spiral],
+  _enemy = [],
   _bulletP = [],
-  _bulletE = []
+  _bulletE = [],
+  _enemyQ = [
+    (10, initEnemy (320, -50) 1 20 Oneway (Mono 260 300)),
+    (200, initEnemy (120, -10) 1 20 Spiral (Mono 160 300))]
   }
 
 update :: Key.Keys -> Field -> Field
@@ -95,6 +111,24 @@ update key = execState $ do
   updateField key
   collideP
   collideE
+  addEnemy
+
+addEnemy :: State Field ()
+addEnemy = do
+  p <- use player
+  eQ <- use enemyQ
+  case maybeHead (p ^. counter) eQ of
+    Just e ->
+      enemy %= (e:) >>
+      enemyQ %= tail
+    Nothing -> return ()
+  
+  where
+    maybeHead :: Int -> [(Int, Enemy)] -> Maybe Enemy
+    maybeHead _ [] = Nothing
+    maybeHead cnt ((time, e):_) = if cnt == time
+      then Just $ e
+      else Nothing
 
 collideP :: State Field ()
 collideP = do
@@ -134,7 +168,7 @@ updateField key = do
   p <- use player
   bulletE %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
   bulletP %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
-  enemy %= filter (\e -> e ^. hp > 0) . map (execState $ updateEnemy p)
+  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (execState $ updateEnemy p)
   player %= Player.update key
 
 addEnemyBullet :: State Field ()
@@ -155,10 +189,6 @@ addPlayerBullet key = do
   where
     lineBullet :: Pos -> Bullet
     lineBullet p = initBullet p 5 (pi/2)
-
-isInside :: Pos -> Bool
-isInside = uncurry (&&) .
-           ((\p -> p >= 0 && p <= 640) *** (\p -> p >= 0 && p <= 480))
 
 draw :: SDL.Surface -> (SDL.Surface, SDL.Surface) -> ([SDL.Surface], [SDL.Surface]) -> Field -> IO ()
 draw screen (imgP, imgE) (imgBP, imgBE) b = do

@@ -7,6 +7,11 @@ import Control.Lens
 import Control.Arrow
 import Control.Monad.State
 
+-- import Control.Bool
+bool :: a -> a -> Bool -> a
+bool x _ False = x
+bool _ y True = y
+
 type Point a = (a,a)
 
 apply :: (a -> a -> a) -> Point a -> Point a -> Point a
@@ -17,6 +22,9 @@ mapp f (a,b) = (a,b) & both %~ f
 
 ($+) :: (Num a) => Point a -> Point a -> Point a
 ($+) = apply (+)
+
+($-) :: (Num a) => Point a -> Point a -> Point a
+($-) = apply (-)
 
 ($*) :: (Num a) => a -> Point a -> Point a
 ($*) k = mapp (*k)
@@ -39,6 +47,10 @@ fromPolar (r,t) = r $* (cos t, -sin t)
 center :: SDL.Rect -> PoInt
 center r = (SDL.rectX r, SDL.rectY r) $+ 
            (mapp floor $ (-1/2) $* toNum (SDL.rectW r, SDL.rectH r))
+
+isInside :: Pos -> Bool
+isInside = uncurry (&&) .
+           ((\p -> p >= 0 && p <= 640) *** (\p -> p >= 0 && p <= 480))
 
 data Pic = Pic {
   _raw :: [SDL.Surface],

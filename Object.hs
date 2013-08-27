@@ -74,12 +74,16 @@ initPlayer = Player (initChara (320, 180) 2 10)
 -- ################################# 
 -- # Enemy
 -- #################################
-data EnemyKind = Oneway | Spiral
+data EnemyKind = Oneway | Spiral deriving (Eq, Show)
+data Motion = Mono Int Int deriving (Eq, Show)
+data MotionState = Go | Stay | Back | Dead deriving (Eq, Show)
 
 data Enemy = Enemy {
   _charaEnemy :: Chara,
   _kind :: EnemyKind,
-  _shotQ :: [Bullet]
+  _shotQ :: [Bullet],
+  _motion :: Motion,
+  _mstate :: MotionState
   }
 
 makeLenses ''Enemy
@@ -90,6 +94,6 @@ instance HasChara Enemy where
 instance HasObject Enemy where
   object = chara . object
 
-initEnemy :: PoInt -> Double -> Int -> EnemyKind -> Enemy
-initEnemy p s h k = Enemy (initChara p s h) k []
+initEnemy :: PoInt -> Double -> Int -> EnemyKind -> Motion -> Enemy
+initEnemy p s h k m = Enemy (initChara p s h) k [] m Go
 
