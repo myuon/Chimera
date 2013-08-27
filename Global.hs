@@ -24,18 +24,19 @@ mapp f (a,b) = (a,b) & both %~ f
 abss :: (Num a) => Point a -> a
 abss (a,b) = a * a + b * b
 
-type Pos = Point Int
+type Pos = Point Double
+type PoInt = Point Int
 
-toNum :: (Num a) => Pos -> Point a
+toNum :: (Num a, Integral b) => Point b -> Point a
 toNum = mapp fromIntegral
 
-toPos :: (RealFrac a) => Point a -> Pos
-toPos = mapp truncate
+toInt :: (RealFrac a) => Point a -> Point Int
+toInt = mapp truncate
 
 fromPolar :: (Floating a) => (a,a) -> Point a
 fromPolar (r,t) = r $* (cos t, -sin t)
 
-center :: SDL.Rect -> Pos
+center :: SDL.Rect -> PoInt
 center r = (SDL.rectX r, SDL.rectY r) $+ 
            (mapp floor $ (-1/2) $* toNum (SDL.rectW r, SDL.rectH r))
 

@@ -90,7 +90,7 @@ mainloop gf = do
     key .~ key' $
     field %~ Field.update key' $
     gf
-    
+  
   where
     getFPS :: (RealFrac a, Fractional a) => a -> Int
     getFPS diff = floor $ (1 / diff)

@@ -12,20 +12,10 @@ import Control.Monad.State
 
 import Data.List
 import Global
+import Object
 import qualified Key
 import qualified Player
 import Debug.Trace
-
-data Bullet = Bullet {
-  _pos :: Point Double,
-  _speed :: Double,
-  _angle :: Double
-  } deriving (Eq)
-
-makeLenses ''Bullet
-
-initBullet :: Pos -> Bullet
-initBullet p = Bullet (toNum p) 5 (pi/2)
 
 updateBullet :: State Bullet ()
 updateBullet = do
@@ -36,7 +26,7 @@ updateBullet = do
 
 drawBullet :: SDL.Surface -> [SDL.Surface] -> Bullet -> IO ()
 drawBullet screen [imgB1] s = do
-  let (px,py) = toPos $ s ^. pos
+  let (px,py) = toInt $ s ^. pos
   let (x,y) = (px,py) $+ (-5,-5)
   
   SDL.blitSurface
@@ -44,48 +34,32 @@ drawBullet screen [imgB1] s = do
     screen (Just $ SDL.Rect x y 10 10)
   return ()
 
-data EnemyKind = Oneway | Spiral
-
-data Enemy = Enemy {
-  _chara :: Player.Chara,
-  _kind :: EnemyKind,
-  _shotQ :: [Bullet]
-  }
-
-makeLenses ''Enemy
-
-initEnemy :: Enemy
-initEnemy = Enemy {
-  _chara = Player.Chara (320, 50) 1 0 20,
-  _kind = Oneway,
-  _shotQ = []
-  }
-
-updateEnemy :: Player.Player -> State Enemy ()
+updateEnemy :: Player -> State Enemy ()
 updateEnemy p = do
   enemy <- get
   shotQ .= addShot enemy p
 
-  (chara . Player.counter) %= (+1)
+  counter %= (+1)
 
-addShot :: Enemy -> Player.Player -> [Bullet]
+addShot :: Enemy -> Player -> [Bullet]
 addShot e p = case (e ^. kind) of 
-  Spiral -> bool id (spiral:) (e^.(chara . Player.counter) `mod` 1 == 0) $ []
-  Oneway -> bool id (toPlayer:) (e^.(chara . Player.counter) `mod` 50 == 0) $ []
+  Spiral -> bool id (spiral:) (e ^. counter `mod` 1 == 0) $ []
+  Oneway -> bool id (toPlayer:) (e ^. counter `mod` 50 == 0) $ []
   where
-    posE = e ^. (chara . Player.pos)
-    posP = p ^. (Player.chara . Player.pos)
-  
+    posE = e ^. pos
+    posP = p ^. pos
+    
     spiral :: Bullet
-    spiral = Bullet (toNum posE) 0.15 $ (fromIntegral $ e^.(chara . Player.counter)) / 10
+    spiral = initBullet posE 0.15 $ (fromIntegral $ e^. (chara . counter)) / 10
 
     toPlayer :: Bullet
-    toPlayer = Bullet (toNum posE) 2 (atan2 (fromIntegral $ posE^._2 - posP^._2)
-                                            (fromIntegral $ posP^._1 - posE^._1))
+    toPlayer = 
+      initBullet posE 2 (atan2 (posE ^. _2 - posP ^. _2)
+                               (posP ^. _1 - posE ^. _1))
 
 drawEnemy :: SDL.Surface -> SDL.Surface -> Enemy -> IO ()
 drawEnemy screen img e = do
-  let (px,py) = e ^. (chara . Player.pos)
+  let (px,py) = toInt $ e ^. pos
   let (x,y) = center $ SDL.Rect px py 32 32
   
   SDL.blitSurface
@@ -97,7 +71,7 @@ clearQ :: State Enemy ()
 clearQ = shotQ .= []
 
 data Field = Field {
-  _player :: Player.Player,
+  _player :: Player,
   _enemy :: [Enemy],
   _bulletP :: [Bullet],
   _bulletE :: [Bullet]
@@ -107,9 +81,9 @@ makeLenses ''Field
 
 initField :: Field
 initField = Field {
-  _player = Player.initPlayer,
-  _enemy = [Enemy (Player.Chara (320, 50) 1 0 20) Oneway [],
-            Enemy (Player.Chara (120, 90) 1 0 20) Spiral []],
+  _player = initPlayer,
+  _enemy = [initEnemy (320, 50) 1 20 Oneway,
+            initEnemy (120, 90) 1 20 Spiral],
   _bulletP = [],
   _bulletE = []
   }
@@ -128,18 +102,10 @@ collideP = do
   bs <- use bulletP
   
   let pair = map (\e -> collideChara e bs) es
+  let bullet' = map snd pair
   enemy .= map fst pair
-  bulletP .= (foldl1 intersect $ map snd pair)
+  bulletP %= bool (const . foldl1 intersect $ bullet') id (bullet' == [])
   
-  where
-    collideChara :: Enemy -> [Bullet] -> (Enemy, [Bullet])
-    collideChara e bullet = (,)
-      ((chara . Player.hp) %~ (subtract (length bullet')) $ e)
-      (filter (\b -> not $ b `elem` bullet') bullet)
-      where
-        bullet' :: [Bullet]
-        bullet' = inDist (e ^. (chara . Player.pos)) bullet
-
 collideE :: State Field ()
 collideE = do
   p <- use player
@@ -148,28 +114,27 @@ collideE = do
   let pair = collideChara p bs
   player .= fst pair
   bulletE .= snd pair
-  
-  where
-    collideChara :: Player.Player -> [Bullet] -> (Player.Player, [Bullet])
-    collideChara p bullet = (,)
-      ((Player.chara . Player.hp) %~ (subtract (length bullet')) $ p)
-      (filter (\b -> not $ b `elem` bullet') bullet)
-      where
-        bullet' :: [Bullet]
-        bullet' = inDist (p ^. (Player.chara . Player.pos)) bullet
 
-inDist :: Pos -> [Bullet] -> [Bullet]
-inDist p = filter ((< 10.0^2) . dist (toNum p) . (\b -> b ^. pos))
+collideChara :: (HasObject c, HasChara c) => c -> [Bullet] -> (c, [Bullet])
+collideChara c bullet = (,)
+  (hp %~ (subtract (length bullet')) $ c)
+  (filter (\b -> not $ b `elem` bullet') bullet)
   where
-    dist :: Point Double -> Point Double -> Double
-    dist a = abss . apply (-) a
+    bullet' :: [Bullet]
+    bullet' = inDist (c ^. pos) bullet
+
+    inDist :: Pos -> [Bullet] -> [Bullet]
+    inDist p = filter ((< 10.0^2) . dist p . (\b -> b ^. pos))
+      where
+        dist :: Pos -> Pos -> Double
+        dist a = abss . apply (-) a
 
 updateField :: Key.Keys -> State Field ()
 updateField key = do
   p <- use player
-  bulletE %= filter (\b -> isInside (toPos $ b ^. pos)) . map (execState updateBullet)
-  bulletP %= filter (\b -> isInside (toPos $ b ^. pos)) . map (execState updateBullet)
-  enemy %= filter (\e -> e ^. (chara . Player.hp) > 0) . map (execState $ updateEnemy p)
+  bulletE %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
+  bulletP %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
+  enemy %= filter (\e -> e ^. hp > 0) . map (execState $ updateEnemy p)
   player %= Player.update key
 
 addEnemyBullet :: State Field ()
@@ -181,11 +146,15 @@ addEnemyBullet = do
 addPlayerBullet :: Key.Keys -> State Field ()
 addPlayerBullet key = do
   p <- use player
-  if key ^. Key.z > 0 && p ^. (Player.chara . Player.counter) `mod` 10 == 0
+  if key ^. Key.z > 0 && p ^. counter `mod` 10 == 0
     then do
       b <- use bulletP
-      bulletP .= initBullet (p ^. (Player.chara . Player.pos)) : b
+      bulletP .= lineBullet (p ^. pos) : b
     else return ()
+    
+  where
+    lineBullet :: Pos -> Bullet
+    lineBullet p = initBullet p 5 (pi/2)
 
 isInside :: Pos -> Bool
 isInside = uncurry (&&) .

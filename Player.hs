@@ -11,33 +11,8 @@ import Control.Monad.State
 import Debug.Trace
 
 import Global
+import Object
 import qualified Key
-
-data Chara = Chara {
-  _pos :: Pos,
-  _speed :: Int,
-  _counter :: Int,
-  _hp :: Int
-  }
-
-makeLenses ''Chara
-
-initChara :: Chara
-initChara = Chara {
-  _pos = (320, 180),
-  _speed = 2,
-  _counter = 0,
-  _hp = 10
-  }
-
-data Player = Player {
-  _chara :: Chara
-  }
-
-makeLenses ''Player
-
-initPlayer :: Player
-initPlayer = Player initChara
 
 update :: Key.Keys -> Player -> Player
 update key = execState $ do
@@ -50,7 +25,7 @@ updateCounter = chara.counter %= (+1)
 updatePos :: Key.Keys -> State Player ()
 updatePos key = do
   k <- use (chara.speed)
-  (chara.pos) %= ($+ (k $* dir))
+  (chara.pos) %= ($+ (k $* toNum dir))
   (chara.pos) %= clamp
   
   where
@@ -62,11 +37,11 @@ updatePos key = do
       addTup (key ^. Key.left  > 0) (-1,0) $
       (0,0)
 
-    addTup :: Bool -> Pos -> Pos -> Pos
+    addTup :: (Num a) => Bool -> Point a -> Point a -> Point a
     addTup b p q = bool q (p$+q) b
 
 clamp :: Pos -> Pos
-clamp = edgeX *** edgeY
+clamp = toNum . (edgeX *** edgeY) . toInt
   where
     edgeX :: Int -> Int
     edgeX = (\p -> bool p 0 (p < 0)) .
@@ -78,7 +53,7 @@ clamp = edgeX *** edgeY
 
 draw :: SDL.Surface -> SDL.Surface -> Player -> IO ()
 draw screen img p = do
-  let (px,py) = p ^. (chara.pos)
+  let (px,py) = toInt $ p ^. (chara.pos)
   let (x,y) = center $ SDL.Rect px py 50 50
   
   SDL.blitSurface 
