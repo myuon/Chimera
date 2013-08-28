@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes #-}
 module Object where
 
+import qualified Graphics.UI.SDL as SDL
 import Control.Lens
 import Control.Monad.State
 
@@ -20,9 +21,17 @@ makeClassy ''Object
 -- ################################# 
 -- # Bullet
 -- #################################
+data BulletKind = BallLarge | BallMedium | BallSmall | Oval | Diamond | Needle | BallFrame
+  deriving (Eq, Show)
+  
+data BulletColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+  deriving (Eq, Show, Enum)
+
 data Bullet = Bullet {
   _objectBullet :: Object,
-  _angle :: Double
+  _angle :: Double,
+  _kindBullet :: BulletKind,
+  _color :: BulletColor
   } deriving (Eq, Show)
 
 makeLenses ''Bullet
@@ -30,8 +39,17 @@ makeLenses ''Bullet
 instance HasObject Bullet where
   object = objectBullet
 
-initBullet :: Pos -> Double -> Double -> Bullet
-initBullet p s ang = Bullet (Object p s) ang
+initBullet :: Pos -> Double -> Double -> BulletKind -> BulletColor -> Bullet
+initBullet p s ang k c = Bullet (Object p s) ang k c
+
+bulletImgRect :: BulletKind -> BulletColor -> SDL.Rect
+bulletImgRect BallLarge c = SDL.Rect (60 * fromEnum c) 0 60 60
+bulletImgRect BallMedium c = SDL.Rect (30 * fromEnum c) 60 30 30
+bulletImgRect BallSmall c = SDL.Rect (20 * fromEnum c) 90 20 20
+bulletImgRect Oval c = SDL.Rect (160 + 10 * fromEnum c) 90 10 20
+bulletImgRect Diamond c = SDL.Rect (240 + 10 * fromEnum c) 90 10 20
+bulletImgRect BallFrame c = SDL.Rect (20 * fromEnum c) 110 20 20
+bulletImgRect Needle c = SDL.Rect (5 * fromEnum c) 130 5 100
 
 
 -- ################################# 
@@ -80,7 +98,7 @@ data MotionState = Go | Stay | Back | Dead deriving (Eq, Show)
 
 data Enemy = Enemy {
   _charaEnemy :: Chara,
-  _kind :: EnemyKind,
+  _kindEnemy :: EnemyKind,
   _shotQ :: [Bullet],
   _motion :: Motion,
   _mstate :: MotionState

@@ -6,6 +6,7 @@ import qualified Graphics.UI.SDL.Image as SDLI
 import Control.Lens
 import Control.Arrow
 import Control.Monad.State
+import qualified Data.Vector as Vector
 
 -- import Control.Bool
 bool :: a -> a -> Bool -> a
@@ -55,7 +56,7 @@ isInside = uncurry (&&) .
 data Pic = Pic {
   _raw :: [SDL.Surface],
   _charaImg :: (SDL.Surface, SDL.Surface),
-  _shotImg :: ([SDL.Surface], [SDL.Surface])
+  _shotImg :: (SDL.Surface, SDL.Surface)
   }
 
 makeLenses ''Pic
@@ -63,7 +64,7 @@ makeLenses ''Pic
 initPic :: IO Pic
 initPic = do 
   r1 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/player_reimu.png"
-  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/_shot3.png"
+  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/shot.png"
   r3 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/dot_yousei.png"
   
   return $ Pic {
@@ -71,3 +72,9 @@ initPic = do
     _charaImg = undefined,
     _shotImg = undefined
   }
+
+sizeRect :: SDL.Rect -> (Int, Int)
+sizeRect (SDL.Rect _ _ w h) = (w,h)
+
+posRect :: SDL.Rect -> Pos
+posRect (SDL.Rect x y _ _) = toNum (x,y)

@@ -120,5 +120,5 @@ main = do
       
       return $
         charaImg .~ (r1, r3) $
-        shotImg .~ ([r2], [r2]) $
+        shotImg .~ (r2, r2) $
         p
