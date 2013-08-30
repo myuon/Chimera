@@ -1,30 +1,72 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts, ImplicitParams #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, ImpredicativeTypes #-}
 module Main where
 
-import qualified Graphics.UI.SDL as SDL
-import qualified Graphics.UI.SDL.Image as SDLI
-import qualified Graphics.UI.SDL.Framerate as SDLF
+import qualified Graphics.UI.FreeGame as Game
 import Control.Lens
 import Control.Monad
-import Control.Monad.State
 import Control.Applicative
-import Control.Bool
 
-import qualified Data.Time as Time
-import Data.Word (Word32)
 import Global
-import qualified Player
+import qualified Data.Array as Array
+import qualified Data.Time as Time
+import qualified Object as Obj
 import qualified Key
 import qualified Field
-import Debug.Trace
+
+makeLenses ''Game.GUIParam
+
+data Load = Load {
+  _font :: Game.Font,
+  _charaImg :: (Game.Bitmap, Game.Bitmap),
+  _bulletImg :: (Obj.BulletImg, Obj.BulletImg)
+  }
+
+makeLenses ''Load
+
+initLoad :: Game.Game Load
+initLoad = do 
+  font <- Game.embedIO $ Game.loadFont "data/font/VL-PGothic-Regular.ttf"
+  r1 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/player_reimu.png"
+  r2 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/dot_yousei.png"
+  r3 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/shot.png"
+  
+  return $ Load {
+    _font = font,
+    _charaImg = (Game.cropBitmap r1 (50,50) (0,0), Game.cropBitmap r2 (32,32) (0,0)),
+    _bulletImg = (\x -> (x,x)) $ makeBulletImg r3
+  }
+  
+  where
+    makeBulletImg :: Game.Bitmap -> Obj.BulletImg
+    makeBulletImg img = Array.listArray (Obj.BallLarge, Obj.BallTiny)
+             [Array.listArray (Obj.Red, Obj.Magenta)
+             [bulletImgRect kind color img
+              | color <- [Obj.Red .. Obj.Magenta]]
+              | kind  <- [Obj.BallLarge .. Obj.BallTiny]]
+  
+    bulletImgRect :: Obj.BulletKind -> Obj.BulletColor -> Game.Bitmap -> Game.Bitmap
+    bulletImgRect b c
+      | b == Obj.BallLarge  = clip (60 * color c) 0 60 60
+      | b == Obj.BallMedium = clip (30 * color c) 60 30 30
+      | b == Obj.BallSmall  = clip (20 * color c) 90 20 20
+      | b == Obj.Oval       = clip (160 + 10 * color c) 90 10 20
+      | b == Obj.Diamond    = clip (240 + 10 * color c) 90 10 20
+      | b == Obj.BallFrame  = clip (20 * color c) 110 20 20
+      | b == Obj.Needle     = clip (5 * color c) 130 5 100
+      | b == Obj.BallTiny   = clip (40 + 10 * color c) 130 10 10
+      where
+        color :: Obj.BulletColor -> Int
+        color = fromEnum
+
+        clip :: Int -> Int -> Int -> Int -> Game.Bitmap -> Game.Bitmap
+        clip a b c d img = Game.cropBitmap img (c,d) (a,b)
 
 data GameFrame = GameFrame {
   _screenMode :: Int,
-  _screen :: IO SDL.Surface,
   _key :: Key.Keys,
   _field :: Field.Field,
-  _pic :: Pic,
-  _fps :: SDLF.FPSManager
+  _load :: Load,
+  _prevTime :: Time.UTCTime
   }
 
 makeLenses ''GameFrame
@@ -32,93 +74,64 @@ makeLenses ''GameFrame
 initGameFrame :: GameFrame
 initGameFrame = GameFrame {
   _screenMode = 0,
-  _screen = SDL.getVideoSurface,
   _key = Key.initKeys,
   _field = Field.initField,
-  _pic = undefined,
-  _fps = undefined
+  _load = undefined,
+  _prevTime = undefined
   }
 
-start :: IO ()
-start = do
-  SDL.init [SDL.InitEverything]
-  SDL.setVideoMode 640 480 32 []
-  SDL.setCaption "Chimera" "chimera"
-  SDL.enableKeyRepeat 1 10
-  return ()
-  
-run :: IO GameFrame -> IO ()
-run gfIO = do
-  gf <- gfIO
-  let gf' = mainloop gf
-  (gf ^. screen) >>= step >>= flip unless (run gf')
+start :: Game.GUIParam
+start =
+  windowTitle .~ "Chimera" $
+  clearColor .~ Game.Color 0 0 0.2 1.0 $
+  Game.def
 
-step :: SDL.Surface -> IO Bool
-step screen =
-  fmap and . sequence $ [
-    SDL.tryFlip screen, 
-    clearDisplay, 
-    SDL.pollEvent >>= (\ev -> return $ isQuit ev)
-    ]
-  
-  where
-    isQuit :: SDL.Event -> Bool
-    isQuit (SDL.KeyDown (SDL.Keysym SDL.SDLK_ESCAPE _ _)) = True
-    isQuit SDL.Quit = True
-    isQuit _ = False
-    
-    clearDisplay :: IO Bool
-    clearDisplay = do
-      color <- SDL.mapRGB (SDL.surfaceGetPixelFormat screen) 0 0 60
-      SDL.fillRect screen (Just (SDL.Rect 0 0 640 480)) color
+step :: Game.Game Bool
+step = do
+  Game.tick
+  Game.keySpecial Game.KeyEsc
 
-mainloop :: GameFrame -> IO GameFrame
+mainloop :: GameFrame -> Game.Game GameFrame
 mainloop gf = do
-  time <- Time.getCurrentTime
-  SDL.delay 1
+  key' <- Key.update (gf ^. key)
+  time' <- Game.embedIO $ Time.getCurrentTime
+  let fps' = getFPS $ Time.diffUTCTime time' (gf ^. prevTime)
   
-  screen <- gf ^. screen
-  key' <- Key.update $ gf ^. key
-  
-  Field.draw screen (gf ^. pic ^. charaImg) (gf ^. pic ^. shotImg) (gf ^. field)
-  
-  SDLF.delay (gf ^. fps)
-  time' <- Time.getCurrentTime
-  SDL.setCaption ("Chimera "++(show $ (getFPS $ Time.diffUTCTime time' time))++":" ++ (show $ length (gf ^. field ^. Field.bulletE))) "chimera"
+  Field.draw (gf ^. load ^. charaImg) (gf ^. load ^. bulletImg) (gf ^. field)
+  writeFPS $ "fps:" ++ (show $ fps')
+  Game.translate (Game.V2 0 50) .
+   Game.colored Game.white .
+   Game.text (gf ^. load ^. font) 20 $ show $ length $ gf ^. field ^. Field.bulletE
   
   return $
     key .~ key' $
     field %~ Field.update key' $
+    prevTime .~ time' $
     gf
-  
+
   where
+    writeFPS :: String -> Game.Game ()
+    writeFPS = Game.translate (Game.V2 0 20) .
+               Game.colored Game.white .
+               Game.text (gf ^. load ^. font) 20
+
     getFPS :: (RealFrac a, Fractional a) => a -> Int
     getFPS diff = floor $ (1 / diff)
 
-end :: IO ()
-end = SDL.quit
+main :: IO (Maybe a)
+main = Game.runGame start $ do
+  load' <- initLoad
+  time' <- Game.embedIO $ Time.getCurrentTime
 
-main :: IO ()
-main = do
-  start
-  pic' <- load
-  fps' <- SDLF.new
-  SDLF.init fps'
-  SDLF.set fps' 60
-  
-  run (return $
-       pic .~ pic' $
-       fps .~ fps' $
-       initGameFrame)
-  end
+  run $
+    load .~ load' $
+    prevTime .~ time' $
+    initGameFrame
+  Game.quit
   
   where
-    load :: IO Pic
-    load = do
-      p <- initPic
-      let [r1,r2,r3] = p ^. raw
-      
-      return $
-        charaImg .~ (r1, r3) $
-        shotImg .~ (r2, r2) $
-        p
+    run :: GameFrame -> Game.Game ()
+    run gf = do
+      gf' <- mainloop gf
+      step >>= flip unless (run gf')
+  

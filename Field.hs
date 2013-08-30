@@ -1,88 +1,32 @@
-{-# LANGUAGE TemplateHaskell, ImplicitParams,
-FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE TemplateHaskell, FlexibleInstances, UndecidableInstances #-}
 module Field where
 
-import qualified Graphics.UI.SDL as SDL
-import qualified Graphics.UI.SDL.Image as SDLI
-import qualified Graphics.UI.SDL.Rotozoomer as SDLR
+import qualified Graphics.UI.FreeGame as Game
 import Control.Lens
 import Control.Arrow
 import Control.Monad
 import Control.Monad.State
 
+import qualified Data.Array as Array
+import qualified Linear.V2 as V2
 import Data.List
 import Global
 import Object
 import qualified Key
 import qualified Player
+import qualified Barrage
 import Debug.Trace
 
-updateBullet :: State Bullet ()
-updateBullet = do
-  (x,y) <- use pos
-  r <- use speed
-  t <- use angle
-  pos .= (x,y) $+ fromPolar (r,t)
-
-drawBullet :: SDL.Surface -> SDL.Surface -> Bullet -> IO ()
-drawBullet screen imgB1 s = do
-  let rect = bulletImgRect (s ^. kindBullet) (s ^. color)
-  let (w,h) = sizeRect rect
-  let (x,y) = (toInt $ s ^. pos) $+ (toInt $ (-1/2) $* toNum (w,h))
-
---  img <- SDLR.rotozoom imgB1 (s ^. angle) 1.0 False
+drawBullet :: BulletImg -> Bullet -> Game.Game ()
+drawBullet imgB s = do
+  let img = imgB Array.! (s ^. kindBullet) Array.! (s ^. color)
   
-  SDL.blitSurface
-    imgB1 (Just $ rect)
-    screen (Just $ SDL.Rect x y w h)
-  return ()
+  Game.translate (toFloat (s ^. pos))
+   $ Game.rotateR (realToFrac $ s ^. angle + pi/2)
+   $ Game.fromBitmap img
 
-updateEnemy :: Player -> State Enemy ()
-updateEnemy p = do
-  enemy <- get
-  pos %= move (enemy ^. motion) ((enemy ^. speed) $* (0,1)) (enemy ^. counter)
-  shotQ .= if (enemy ^. mstate == Stay) then addShot enemy p else []
-  counter %= (+1)
-  mstate %= checkState (enemy ^. motion) enemy
-  where
-    move :: Motion -> Pos -> Int -> Pos -> Pos
-    move (Mono go stay) v cnt
-      | cnt < go = ($+) v
-      | go <= cnt && cnt < go + stay = id
-      | go + stay <= cnt = \p -> p $- v
-
-    checkState :: Motion -> Enemy -> MotionState -> MotionState
-    checkState (Mono go stay) e
-      | e ^. counter == go = const Stay
-      | e ^. counter == go + stay = const Back
-      | go + stay < e ^. counter && not (isInside (e ^. pos)) = const Dead 
-      | otherwise = id
-
-    addShot :: Enemy -> Player -> [Bullet]
-    addShot e p = case (e ^. kindEnemy) of 
-      Spiral -> bool id (spiral:) (e ^. counter `mod` 3 == 0) $ []
-      Oneway -> bool id (toPlayer:) (e ^. counter `mod` 50 == 0) $ []
-      where
-        posE = e ^. pos
-        posP = p ^. pos
-        
-        spiral :: Bullet
-        spiral = let ang = (fromIntegral $ e ^. counter) / 10 in
-          initBullet posE 2 ang Needle Red
-
-        toPlayer :: Bullet
-        toPlayer = let ang = atan2 (posE ^. _2 - posP ^. _2) (posP ^. _1 - posE ^. _1) in
-          initBullet posE 2 ang BallLarge Green
-
-drawEnemy :: SDL.Surface -> SDL.Surface -> Enemy -> IO ()
-drawEnemy screen img e = do
-  let (px,py) = toInt $ e ^. pos
-  let (x,y) = center $ SDL.Rect px py 32 32
-  
-  SDL.blitSurface
-    img (Just $ SDL.Rect 0 0 32 32)
-    screen (Just $ SDL.Rect x y 32 32)
-  return ()
+drawEnemy :: Game.Bitmap -> Enemy -> Game.Game ()
+drawEnemy img e = Game.translate (toFloat $ e ^. pos) $ Game.fromBitmap img
 
 clearQ :: State Enemy ()
 clearQ = shotQ .= []
@@ -104,8 +48,9 @@ initField = Field {
   _bulletP = [],
   _bulletE = [],
   _enemyQ = [
-    (10, initEnemy (320, -50) 1 20 Oneway (Mono 260 300)),
-    (200, initEnemy (120, -10) 1 20 Spiral (Mono 160 300))]
+    (10, initEnemy (fromPair (320, 200)) 1 20 (BZako 5) (Mono 0 50)),
+    (200, initEnemy (fromPair (320, -20)) 1 20 (BBoss 1) (WaitMono 100))
+    ]
   }
 
 update :: Key.Keys -> Field -> Field
@@ -122,8 +67,8 @@ addEnemy = do
   p <- use player
   eQ <- use enemyQ
   case maybeHead (p ^. counter) eQ of
-    Just e ->
-      enemy %= (e:) >>
+    Just e -> do
+      enemy %= (e:)
       enemyQ %= tail
     Nothing -> return ()
   
@@ -165,15 +110,15 @@ collideChara c bullet = (,)
     inDist p = filter ((< 10.0^2) . dist p . (\b -> b ^. pos))
       where
         dist :: Pos -> Pos -> Double
-        dist a = abss . apply (-) a
+        dist p q = absV $ (p - q)
 
 updateField :: Key.Keys -> State Field ()
 updateField key = do
   p <- use player
-  bulletE %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
-  bulletP %= filter (\b -> isInside $ b ^. pos) . map (execState updateBullet)
-  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (execState $ updateEnemy p)
   player %= Player.update key
+  bulletE %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)
+  bulletP %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)  
+  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (execState $ (Barrage.barrage (e ^. kindEnemy) ^. Barrage.enemy) p) e)
 
 addEnemyBullet :: State Field ()
 addEnemyBullet = do
@@ -192,11 +137,11 @@ addPlayerBullet key = do
     
   where
     lineBullet :: Pos -> Bullet
-    lineBullet p = initBullet p 5 (pi/2) Diamond Red
+    lineBullet p = initBullet p 5 (pi/2) Diamond Red BPlayer
 
-draw :: SDL.Surface -> (SDL.Surface, SDL.Surface) -> (SDL.Surface, SDL.Surface) -> Field -> IO ()
-draw screen (imgP, imgE) (imgBP, imgBE) b = do
-  mapM_ (drawBullet screen imgBP) (b ^. bulletP)
-  mapM_ (drawBullet screen imgBE) (b ^. bulletE)
-  mapM_ (drawEnemy screen imgE) (b ^. enemy)
-  Player.draw screen imgP (b ^. player)
+draw :: (Game.Bitmap, Game.Bitmap) -> (BulletImg, BulletImg) -> Field -> Game.Game ()
+draw (imgP, imgE) (imgBP, imgBE) b = do
+  mapM_ (drawBullet imgBP) (b ^. bulletP)
+  mapM_ (drawBullet imgBE) (b ^. bulletE)
+  mapM_ (drawEnemy imgE) (b ^. enemy)
+  Player.draw imgP (b ^. player)
