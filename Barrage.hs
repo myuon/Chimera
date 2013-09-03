@@ -59,6 +59,15 @@ normalEnemy danmaku p = do
 
 barrage :: BarrangeIndex -> Pattern
 barrage BPlayer = Pattern normalBullet undefined undefined
+barrage bindex@BDebug = Pattern normalBullet (normalEnemy danmaku) danmaku
+  where
+    danmaku :: Enemy -> Player -> [Bullet]
+    danmaku e p = do
+      let cnt = e ^. counter
+      let posE = e ^. pos
+      let ang = (fromIntegral $ cnt) / 10
+      if_ (cnt `mod` 1 == 0) $
+        [initBullet posE 0.15 ang BallTiny Green bindex]
 barrage bindex@(BZako 1) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -93,7 +102,7 @@ barrage bindex@(BZako 4) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
-      let cnt = e ^. counter - 60
+      let cnt = e ^. counter
       let posE = e ^. pos
       let ang = (fromIntegral $ cnt) / 10
       let time = 15; outerN = 10; innerN = 20; strain = 18/10;
@@ -108,7 +117,7 @@ barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
-      let cnt = e ^. counter - 60
+      let cnt = e ^. counter
       let posE = e ^. pos
       if_ (cnt `mod` 3 == 0) $
         let ang = (fromIntegral $ cnt) / 10 in
@@ -118,31 +127,30 @@ barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
     bullet :: State Bullet ()
     bullet = do
       cnt <- use counter
-      when (30 < cnt && cnt < 170) $ do
+      when (30 < cnt && cnt < 120) $ do
         p <- use param
         angle %= (+ (fromP p) * pi/400)
-        speed %= (subtract (2.5/200))
+        speed %= (subtract (3.0/100))
       normalBullet
       where
         fromP :: Int -> Double
         fromP 0 = -1
         fromP 1 = 1
-
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
-      let cnt = e ^. counter - 60
+      let cnt = e ^. counter
       let posE = e ^. pos
-      let innerN = 60
-      if_ (cnt `mod` 50 == 0) $ concat $
+      let innerN = 50
+      if_ (cnt `mod` 90 == 0) $ concat $
         [[initBullet' posE
-          3.0 (i*2*pi/innerN) Oval Purple bindex 0,
+          3.5 (i*2*pi/innerN) Oval Purple bindex 0,
           initBullet' posE
-          3.0 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
+          3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
 barrage bindex@(BBoss 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
-      let cnt = e ^. counter - 60
+      let cnt = e ^. counter
       let posE = e ^. pos
       let innerN = 16
       let theta = (fromIntegral cnt)*pi/2

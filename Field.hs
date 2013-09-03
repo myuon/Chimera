@@ -2,6 +2,7 @@
 module Field where
 
 import qualified Graphics.UI.FreeGame as Game
+import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
 import Control.Lens
 import Control.Arrow
 import Control.Monad
@@ -20,13 +21,13 @@ import Debug.Trace
 drawBullet :: BulletImg -> Bullet -> Game.Game ()
 drawBullet imgB s = do
   let img = imgB Array.! (s ^. kindBullet) Array.! (s ^. color)
-  
-  Game.translate (toFloat (s ^. pos))
-   $ Game.rotateR (realToFrac $ s ^. angle + pi/2)
+
+  Game.translate (s ^. pos)
+   $ Game.rotateR (s ^. angle + pi/2)
    $ Game.fromBitmap img
 
 drawEnemy :: Game.Bitmap -> Enemy -> Game.Game ()
-drawEnemy img e = Game.translate (toFloat $ e ^. pos) $ Game.fromBitmap img
+drawEnemy img e = Game.translate (e ^. pos) $ Game.fromBitmap img
 
 clearQ :: State Enemy ()
 clearQ = shotQ .= []
@@ -48,6 +49,7 @@ initField = Field {
   _bulletP = [],
   _bulletE = [],
   _enemyQ = [
+    (10, initEnemy (fromPair (320, 200)) 1 20 (BDebug) (WaitMono 0)),
     (10, initEnemy (fromPair (320, 200)) 1 20 (BZako 5) (Mono 0 50)),
     (200, initEnemy (fromPair (320, -20)) 1 20 (BBoss 1) (WaitMono 100))
     ]

@@ -26,7 +26,8 @@ data BulletColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magent
 
 data BulletMotion = Normal | Rotate Double deriving (Eq, Show)
 
-data BarrangeIndex = BPlayer | BZako Int | BBoss Int deriving (Eq, Show)
+data BarrangeIndex = BPlayer | BZako Int | BBoss Int | BDebug
+  deriving (Eq, Show)
 
 type BulletImg = Array.Array BulletKind
                 (Array.Array BulletColor (Game.Bitmap))

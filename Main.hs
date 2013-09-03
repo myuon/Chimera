@@ -2,6 +2,8 @@
 module Main where
 
 import qualified Graphics.UI.FreeGame as Game
+import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
+import qualified Graphics.UI.FreeGame.Internal.Finalizer as Fin
 import Control.Lens
 import Control.Monad
 import Control.Applicative

@@ -47,4 +47,4 @@ clamp = toNum . fromPair . (edgeX *** edgeY) . toPair . toInt
 
 draw :: Game.Bitmap -> Player -> Game.Game ()
 draw img p = do
-  Game.translate (toFloat $ p ^. pos) $ Game.fromBitmap img
+  Game.translate (p ^. pos) $ Game.fromBitmap img

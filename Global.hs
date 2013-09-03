@@ -20,9 +20,6 @@ type PoInt = V2.V2 Int
 toNum :: PoInt -> Pos
 toNum = fmap fromIntegral
 
-toFloat :: Pos -> V2.V2 Float
-toFloat = fmap double2Float
-
 toInt :: Pos -> PoInt
 toInt = fmap truncate
 
