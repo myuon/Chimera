@@ -1,80 +1,42 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Global where
 
-import qualified Graphics.UI.SDL as SDL
-import qualified Graphics.UI.SDL.Image as SDLI
+import qualified Graphics.UI.FreeGame as Game
+import qualified Linear.V2 as V2
+import qualified Linear.Vector as Vec
 import Control.Lens
 import Control.Arrow
 import Control.Monad.State
-import qualified Data.Vector as Vector
+import Data.Foldable as F
 
 -- import Control.Bool
 bool :: a -> a -> Bool -> a
 bool x _ False = x
 bool _ y True = y
 
-type Point a = (a,a)
+type Pos = V2.V2 Double
+type PoInt = V2.V2 Int
 
-apply :: (a -> a -> a) -> Point a -> Point a -> Point a
-apply f (a,b) (c,d) = (f a c, f b d)
+toNum :: PoInt -> Pos
+toNum = fmap fromIntegral
 
-mapp :: (a -> b) -> Point a -> Point b
-mapp f (a,b) = (a,b) & both %~ f
+toInt :: Pos -> PoInt
+toInt = fmap truncate
 
-($+) :: (Num a) => Point a -> Point a -> Point a
-($+) = apply (+)
+fromPair :: (a,a) -> V2.V2 a
+fromPair = uncurry V2.V2
 
-($-) :: (Num a) => Point a -> Point a -> Point a
-($-) = apply (-)
+toPair :: V2.V2 a -> (a,a)
+toPair (V2.V2 a b) = (a,b)
 
-($*) :: (Num a) => a -> Point a -> Point a
-($*) k = mapp (*k)
+($*) :: (Num a) => a -> V2.V2 a -> V2.V2 a
+($*) = (Vec.*^)
 
-abss :: (Num a) => Point a -> a
-abss (a,b) = a * a + b * b
-
-type Pos = Point Double
-type PoInt = Point Int
-
-toNum :: (Num a, Integral b) => Point b -> Point a
-toNum = mapp fromIntegral
-
-toInt :: (RealFrac a) => Point a -> Point Int
-toInt = mapp truncate
-
-fromPolar :: (Floating a) => (a,a) -> Point a
-fromPolar (r,t) = r $* (cos t, -sin t)
-
-center :: SDL.Rect -> PoInt
-center r = (SDL.rectX r, SDL.rectY r) $+ 
-           (mapp floor $ (-1/2) $* toNum (SDL.rectW r, SDL.rectH r))
+fromPolar :: (Double, Double) -> Pos
+fromPolar (r,t) = r $* Game.unitV2 (-t)
 
 isInside :: Pos -> Bool
-isInside = uncurry (&&) .
-           ((\p -> p >= 0 && p <= 640) *** (\p -> p >= 0 && p <= 480))
+isInside (V2.V2 a b) = (0 <= a && a <= 640) && (0 <= b && b <= 480)
 
-data Pic = Pic {
-  _raw :: [SDL.Surface],
-  _charaImg :: (SDL.Surface, SDL.Surface),
-  _shotImg :: (SDL.Surface, SDL.Surface)
-  }
-
-makeLenses ''Pic
-
-initPic :: IO Pic
-initPic = do 
-  r1 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/player_reimu.png"
-  r2 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/shot.png"
-  r3 <- SDL.displayFormatAlpha =<< SDLI.load "data/img/dot_yousei.png"
-  
-  return $ Pic {
-    _raw = [r1, r2, r3],
-    _charaImg = undefined,
-    _shotImg = undefined
-  }
-
-sizeRect :: SDL.Rect -> (Int, Int)
-sizeRect (SDL.Rect _ _ w h) = (w,h)
-
-posRect :: SDL.Rect -> Pos
-posRect (SDL.Rect x y _ _) = toNum (x,y)
+absV :: (Num a) => V2.V2 a -> a
+absV v = F.sum $ v * v
