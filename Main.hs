@@ -35,7 +35,7 @@ initLoad = do
   return $ Load {
     _font = font,
     _charaImg = (Game.cropBitmap r1 (50,50) (0,0), Game.cropBitmap r2 (32,32) (0,0)),
-    _bulletImg = (\x -> (x,x)) $ makeBulletImg r3
+    _bulletImg = (\x -> (x,x)) $! makeBulletImg r3
   }
   
   where

@@ -21,10 +21,10 @@ import Debug.Trace
 drawBullet :: BulletImg -> Bullet -> Game.Game ()
 drawBullet imgB s = do
   let img = imgB Array.! (s ^. kindBullet) Array.! (s ^. color)
-
-  Game.translate (s ^. pos)
-   $ Game.rotateR (s ^. angle + pi/2)
-   $ Game.fromBitmap img
+  
+  Game.translate (s ^. pos) $
+    Game.rotateR (s ^. angle + pi/2) $
+    Game.fromBitmap img
 
 drawEnemy :: Game.Bitmap -> Enemy -> Game.Game ()
 drawEnemy img e = Game.translate (e ^. pos) $ Game.fromBitmap img
@@ -49,9 +49,9 @@ initField = Field {
   _bulletP = [],
   _bulletE = [],
   _enemyQ = [
-    (10, initEnemy (fromPair (320, 200)) 1 20 (BDebug) (WaitMono 0)),
-    (10, initEnemy (fromPair (320, 200)) 1 20 (BZako 5) (Mono 0 50)),
-    (200, initEnemy (fromPair (320, -20)) 1 20 (BBoss 1) (WaitMono 100))
+--    (10, initEnemy (fromPair (320, 200)) 1 20 (BDebug) (WaitMono 0)),
+    (10, initEnemy (fromPair (320, 200)) 1 20 (BZako 0) (Mono 0 300)),
+    (400, initEnemy (fromPair (320, -20)) 1 20 (BBoss 0) (WaitMono 100))
     ]
   }
 

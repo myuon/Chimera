@@ -1,13 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Global where
 
-import qualified Graphics.UI.SDL as SDL
-import qualified Graphics.UI.SDL.Image as SDLI
+import qualified Graphics.UI.FreeGame as Game
 import qualified Linear.V2 as V2
+import qualified Linear.Vector as Vec
 import Control.Lens
 import Control.Arrow
 import Control.Monad.State
-import GHC.Float
+import Data.Foldable as F
 
 -- import Control.Bool
 bool :: a -> a -> Bool -> a
@@ -30,15 +30,13 @@ toPair :: V2.V2 a -> (a,a)
 toPair (V2.V2 a b) = (a,b)
 
 ($*) :: (Num a) => a -> V2.V2 a -> V2.V2 a
-($*) k = fmap (*k)
+($*) = (Vec.*^)
 
 fromPolar :: (Double, Double) -> Pos
-fromPolar (r,t) = r $* (fromPair (cos t, -sin t))
+fromPolar (r,t) = r $* Game.unitV2 (-t)
 
 isInside :: Pos -> Bool
-isInside = uncurry (&&) .
-           ((\p -> p >= 0 && p <= 640) *** (\p -> p >= 0 && p <= 480)) .
-           toPair
+isInside (V2.V2 a b) = (0 <= a && a <= 640) && (0 <= b && b <= 480)
 
 absV :: (Num a) => V2.V2 a -> a
-absV v = (v ^. V2._x) ^ 2 + (v ^. V2._y) ^2
+absV v = F.sum $ v * v

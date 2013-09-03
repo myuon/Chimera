@@ -2,6 +2,7 @@
 module Object where
 
 import qualified Graphics.UI.FreeGame as Game
+import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
 import qualified Data.Array as Array
 import Control.Lens
 import Control.Monad.State
@@ -30,7 +31,7 @@ data BarrangeIndex = BPlayer | BZako Int | BBoss Int | BDebug
   deriving (Eq, Show)
 
 type BulletImg = Array.Array BulletKind
-                (Array.Array BulletColor (Game.Bitmap))
+                (Array.Array BulletColor Game.Bitmap)
 
 data Bullet = Bullet {
   _objectBullet :: Object,

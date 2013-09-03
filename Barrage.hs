@@ -22,6 +22,9 @@ if_ :: Bool -> [a] -> [a]
 if_ True = id
 if_ False = const []
 
+for :: [a] -> (a -> b) -> [b]
+for = flip map
+
 moveMState :: MotionState -> Pos -> Pos -> Pos
 moveMState Go v = (+v)
 moveMState Stay v = id
@@ -66,20 +69,31 @@ barrage bindex@BDebug = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posE = e ^. pos
       let ang = (fromIntegral $ cnt) / 10
-      if_ (cnt `mod` 1 == 0) $
-        [initBullet posE 0.15 ang BallTiny Green bindex]
+      if_ (cnt `mod` 1 == 0) $ for [1] $ \i -> do
+        initBullet posE 0.15 ang BallTiny Green bindex
+barrage bindex@(BZako 0) = Pattern normalBullet (normalEnemy danmaku) danmaku
+  where
+    danmaku :: Enemy -> Player -> [Bullet]
+    danmaku e p = do
+      let cnt = e ^. counter
+      let posE = e ^. pos; posP = p ^. pos
+      let ang = (fromIntegral $ cnt) / 10
+      let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
+      if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
+        let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
+        [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
 barrage bindex@(BZako 1) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
       let cnt = e ^. counter
       let posE = e ^. pos
-      let ang = (fromIntegral $ cnt) / 10
-      if_ (cnt `mod` 15 == 0) $
-        let ang = \i -> i*2*pi/10
-            offset = (fromIntegral cnt) / 10 in
-        [initBullet (posE + fromPolar (150, offset + ang i)) (-0.7) (ang i)
-          Oval (toEnum $ cnt `mod` 8) bindex | i <- [1..10]]
+      let offset = (fromIntegral cnt) / 10
+      if_ (cnt `mod` 15 == 0) $ for [1..10] $ \i -> do
+        let ang = i*2*pi/10
+        initBullet
+          (posE + fromPolar (150, offset + ang)) (-0.7) ang
+          Oval (toEnum $ cnt `mod` 8) bindex
 barrage bindex@(BZako 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -87,8 +101,8 @@ barrage bindex@(BZako 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posP = p ^. pos; posE = e ^. pos
       let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
-      if_ (cnt `mod` 50 == 0) $
-        [initBullet posE 2 pAngle BallLarge Blue bindex]
+      if_ (cnt `mod` 50 == 0) $ for [1] $ \i -> do
+        initBullet posE 2 pAngle BallLarge Blue bindex
 barrage bindex@(BZako 3) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -96,32 +110,56 @@ barrage bindex@(BZako 3) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posE = e ^. pos
       let ang = (fromIntegral $ cnt) / 10
-      if_ (cnt `mod` 3 == 0) $
-        [initBullet posE 3 ang Needle Green bindex]
+      if_ (cnt `mod` 3 == 0) $ for [1] $ \i -> do
+        initBullet posE 3 ang Needle Green bindex
 barrage bindex@(BZako 4) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
       let cnt = e ^. counter
       let posE = e ^. pos
-      let ang = (fromIntegral $ cnt) / 10
       let time = 15; outerN = 10; innerN = 20; strain = 18/10;
-          theta i = (fromIntegral cnt)*pi/(fromIntegral $ time*outerN)
-          phi i = i*strain*pi/innerN - pi/2*(1+strain)
+      let theta = (fromIntegral cnt)*pi/(fromIntegral $ time*outerN)
       if_ (cnt `mod` time == 0 && 0 < cnt && cnt < time*outerN) $ concat $
-        [[initBullet (posE + fromPolar (150, theta i - pi/2) + fromPolar (15, phi i))
-          (1.5) (phi i) BallSmall Yellow bindex,
-          initBullet (posE + fromPolar (150, -theta i - pi/2) + fromPolar (15, phi i))
-          (1.5) (phi i) BallSmall Cyan bindex] | i <- [1..innerN]]
+        for [1..innerN] $ \i -> do
+          let phi = i*strain*pi/innerN - pi/2*(1+strain)
+          let bullet k color = initBullet (posE + fromPolar (150, k * theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall color bindex
+          [bullet 1 Yellow, bullet (-1) Cyan]
 barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
     danmaku e p = do
       let cnt = e ^. counter
+      let posE = e ^. pos; posP = p ^. pos
+      let ang = (fromIntegral $ cnt) / 10
+      let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
+      if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
+        let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
+        [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
+barrage bindex@(BBoss 0) = Pattern bullet (normalEnemy danmaku) danmaku
+  where
+    bullet :: State Bullet ()
+    bullet = do
+      cnt <- use counter
+      when (30 < cnt && cnt < 120) $ do
+        p <- use param
+        angle %= (+ (fromP p) * pi/400)
+        speed %= (subtract (3.0/100))
+      normalBullet
+      where
+        fromP :: Int -> Double
+        fromP 0 = -1
+        fromP 1 = 1
+    danmaku :: Enemy -> Player -> [Bullet]
+    danmaku e p = do
+      let cnt = e ^. counter
       let posE = e ^. pos
-      if_ (cnt `mod` 3 == 0) $
-        let ang = (fromIntegral $ cnt) / 10 in
-        [initBullet posE 3 ang Needle Green bindex]
+      let innerN = 50
+      if_ (cnt `mod` 90 == 0) $ concat $
+        [[initBullet' posE
+          3.5 (i*2*pi/innerN) Oval Purple bindex 0,
+          initBullet' posE
+          3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
 barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
   where
     bullet :: State Bullet ()
