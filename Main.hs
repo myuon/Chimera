@@ -20,7 +20,8 @@ makeLenses ''Game.GUIParam
 data Load = Load {
   _font :: Game.Font,
   _charaImg :: (Game.Bitmap, Game.Bitmap),
-  _bulletImg :: (Obj.BulletImg, Obj.BulletImg)
+  _bulletImg :: (Obj.BulletImg, Obj.BulletImg),
+  _board :: Game.Bitmap
   }
 
 makeLenses ''Load
@@ -31,11 +32,13 @@ initLoad = do
   r1 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/player_reimu.png"
   r2 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/dot_yousei.png"
   r3 <- Game.embedIO $ Game.loadBitmapFromFile "data/img/shot.png"
+  b <- Game.embedIO $ Game.loadBitmapFromFile "data/img/board.png"
   
   return $ Load {
     _font = font,
     _charaImg = (Game.cropBitmap r1 (50,50) (0,0), Game.cropBitmap r2 (32,32) (0,0)),
-    _bulletImg = (\x -> (x,x)) $! makeBulletImg r3
+    _bulletImg = (\x -> (x,x)) $! makeBulletImg r3,
+    _board = b
   }
   
   where
@@ -100,6 +103,9 @@ mainloop gf = do
   let fps' = getFPS $ Time.diffUTCTime time' (gf ^. prevTime)
   
   Field.draw (gf ^. load ^. charaImg) (gf ^. load ^. bulletImg) (gf ^. field)
+  Game.translate (Game.V2 320 240) $
+    Game.fromBitmap (gf ^. load ^. board)
+
   writeFPS $ "fps:" ++ (show $ fps')
   Game.translate (Game.V2 0 50) .
    Game.colored Game.white .

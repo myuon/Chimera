@@ -9,6 +9,14 @@ import Control.Arrow
 import Control.Monad.State
 import Data.Foldable as F
 
+winWidth = 640
+winHeight = 480
+
+areaTop = 16 :: Double
+areaLeft = 32 :: Double
+areaBottom = 444 :: Double
+areaRight = 416 :: Double
+
 -- import Control.Bool
 bool :: a -> a -> Bool -> a
 bool x _ False = x
@@ -36,7 +44,7 @@ fromPolar :: (Double, Double) -> Pos
 fromPolar (r,t) = r $* Game.unitV2 (-t)
 
 isInside :: Pos -> Bool
-isInside (V2.V2 a b) = (0 <= a && a <= 640) && (0 <= b && b <= 480)
+isInside (V2.V2 a b) = (areaLeft <= a && a <= areaRight) && (areaTop <= b && b <= areaBottom)
 
 absV :: (Num a) => V2.V2 a -> a
 absV v = F.sum $ v * v
