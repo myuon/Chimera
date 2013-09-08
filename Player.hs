@@ -35,15 +35,15 @@ updatePos key = do
       fromPair (0,0)
 
 clamp :: Pos -> Pos
-clamp = toNum . fromPair . (edgeX *** edgeY) . toPair . toInt
+clamp = fromPair . (edgeX *** edgeY) . toPair
   where
-    edgeX :: Int -> Int
-    edgeX = (\p -> bool p 0 (p < 0)) .
-            (\p -> bool p 640 (p > 640))
+--    edgeX :: Int -> Int
+    edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaRight (p > areaRight))
     
-    edgeY :: Int -> Int
-    edgeY = (\p -> bool p 0 (p < 0)) .
-            (\p -> bool p 480 (p > 480))
+--    edgeY :: Int -> Int
+    edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaBottom (p > areaBottom))
 
 draw :: Game.Bitmap -> Player -> Game.Game ()
 draw img p = do
