@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, FlexibleInstances, UndecidableInstances #-}
+{-# LANGUAGE TemplateHaskell, FlexibleInstances, UndecidableInstances, RankNTypes, GADTs #-}
 module Chimera.Field where
 
 import qualified Graphics.UI.FreeGame as Game
@@ -17,6 +17,27 @@ import qualified Chimera.Key as Key
 import qualified Chimera.Player as Player
 import qualified Chimera.Barrage as Barrage
 import Debug.Trace
+
+import Control.Monad.Operational.Mini
+
+data LookAt p q = LookAt {
+  _local :: p,
+  _global :: q
+  }
+
+makeLenses ''LookAt
+
+type AtEnemy = LookAt Enemy Field
+
+runDanmaku :: Danmaku () -> State AtEnemy ()
+runDanmaku = interpret exec
+
+exec :: Pattern' x -> State AtEnemy x
+exec Get = (use local)
+exec (Put e) = (local .= e)
+
+
+
 
 drawBullet :: BulletImg -> Bullet -> Game.Game ()
 drawBullet imgB s = do
@@ -117,10 +138,13 @@ collideChara c bullet = (,)
 updateField :: Key.Keys -> State Field ()
 updateField key = do
   p <- use player
+  f <- get
   player %= Player.update key
-  bulletE %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)
-  bulletP %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)  
-  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (execState $ (Barrage.barrage (e ^. kindEnemy) ^. Barrage.enemy) p) e)
+  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (\(LookAt e _) -> e) $ (execState $ runDanmaku Barrage.zako1) (LookAt e f))
+
+--  bulletE %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)
+--  bulletP %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)  
+--  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (execState $ (Barrage.barrage (e ^. kindEnemy) ^. Barrage.enemy) p) e)
 
 addEnemyBullet :: State Field ()
 addEnemyBullet = do

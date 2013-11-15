@@ -1,13 +1,14 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs #-}
 module Chimera.Object where
 
 import qualified Graphics.UI.FreeGame as Game
-import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
 import qualified Data.Array as Array
 import Control.Lens
 import Control.Monad.State
 
 import Chimera.Global
+
+import Control.Monad.Operational.Mini
 
 data Object = Object {
   _pos :: Pos,
@@ -105,4 +106,14 @@ instance HasObject Enemy where
 
 initEnemy :: Pos -> Double' -> Int -> BarrangeIndex -> Motion -> Enemy
 initEnemy p s h i m = Enemy (initChara p s h) i [] m Go
+
+
+data Pattern' p where
+  Shots :: [Bullet] -> Pattern' ()
+--  Environ :: Pattern Field
+  GetPlayer :: Pattern' Player
+  Get :: Pattern' Enemy
+  Put :: Enemy -> Pattern' ()
+
+type Danmaku = Program Pattern'
 

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs #-}
 module Chimera.Barrage where
 
 import qualified Graphics.UI.FreeGame as Game
@@ -9,6 +9,16 @@ import Control.Monad.State
 
 import Chimera.Object
 import Chimera.Global
+
+import Control.Monad.Operational.Mini
+
+zako1 :: Danmaku ()
+zako1 = do
+  enemy <- singleton Get
+  (singleton . Put) $ enemy
+
+
+{-
 
 data Pattern = Pattern {
   _bullet :: State Bullet (),
@@ -71,6 +81,7 @@ barrage bindex@BDebug = Pattern normalBullet (normalEnemy danmaku) danmaku
       let ang = (fromIntegral $ cnt) / 10
       if_ (cnt `mod` 1 == 0) $ for [1] $ \i -> do
         initBullet posE 0.15 ang BallTiny Green bindex
+
 barrage bindex@(BZako 0) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -82,6 +93,7 @@ barrage bindex@(BZako 0) = Pattern normalBullet (normalEnemy danmaku) danmaku
       if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
         let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
         [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
+
 barrage bindex@(BZako 1) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -112,6 +124,7 @@ barrage bindex@(BZako 3) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let ang = (fromIntegral $ cnt) / 10
       if_ (cnt `mod` 3 == 0) $ for [1] $ \i -> do
         initBullet posE 3 ang Needle Green bindex
+
 barrage bindex@(BZako 4) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -125,6 +138,7 @@ barrage bindex@(BZako 4) = Pattern normalBullet (normalEnemy danmaku) danmaku
           let phi = i*strain*pi/innerN - pi/2*(1+strain)
           let bullet k color = initBullet (posE + fromPolar (150, k * theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall color bindex
           [bullet 1 Yellow, bullet (-1) Cyan]
+
 barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -136,6 +150,7 @@ barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
       if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
         let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
         [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
+
 barrage bindex@(BBoss 0) = Pattern bullet (normalEnemy danmaku) danmaku
   where
     bullet :: State Bullet ()
@@ -160,6 +175,7 @@ barrage bindex@(BBoss 0) = Pattern bullet (normalEnemy danmaku) danmaku
           3.5 (i*2*pi/innerN) Oval Purple bindex 0,
           initBullet' posE
           3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
+
 barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
   where
     bullet :: State Bullet ()
@@ -184,6 +200,7 @@ barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
           3.5 (i*2*pi/innerN) Oval Purple bindex 0,
           initBullet' posE
           3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
+
 barrage bindex@(BBoss 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
   where
     danmaku :: Enemy -> Player -> [Bullet]
@@ -198,3 +215,4 @@ barrage bindex@(BBoss 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
         Oval (toEnum $ i `mod` 8) bindex | i <- [1..innerN]]
 barrange _ = undefined
 
+-}

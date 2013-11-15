@@ -37,11 +37,9 @@ updatePos key = do
 clamp :: Pos -> Pos
 clamp = fromPair . (edgeX *** edgeY) . toPair
   where
---    edgeX :: Int -> Int
     edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
             (\p -> bool p areaRight (p > areaRight))
     
---    edgeY :: Int -> Int
     edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
             (\p -> bool p areaBottom (p > areaBottom))
 
