@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Global where
+module Chimera.Global where
 
 import qualified Graphics.UI.FreeGame as Game
 import qualified Linear.Vector as Vec

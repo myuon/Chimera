@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Key where
+module Chimera.Key where
 
 import qualified Graphics.UI.FreeGame as Game
 import Control.Lens

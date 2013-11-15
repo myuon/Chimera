@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes #-}
-module Barrage where
+module Chimera.Barrage where
 
 import qualified Graphics.UI.FreeGame as Game
 
@@ -7,8 +7,8 @@ import qualified Linear.V2 as V2
 import Control.Lens
 import Control.Monad.State
 
-import Object
-import Global
+import Chimera.Object
+import Chimera.Global
 
 data Pattern = Pattern {
   _bullet :: State Bullet (),
@@ -132,7 +132,7 @@ barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posE = e ^. pos; posP = p ^. pos
       let ang = (fromIntegral $ cnt) / 10
-      let pAngle = atan2 ((posE - posP) ^. Game._y) (-(posE - posP) ^. Gamels._x)
+      let pAngle = atan2 ((posE - posP) ^. Game._y) (-(posE - posP) ^. Game._x)
       if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
         let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
         [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]

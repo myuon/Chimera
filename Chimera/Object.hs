@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes #-}
-module Object where
+module Chimera.Object where
 
 import qualified Graphics.UI.FreeGame as Game
 import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
@@ -7,7 +7,7 @@ import qualified Data.Array as Array
 import Control.Lens
 import Control.Monad.State
 
-import Global
+import Chimera.Global
 
 data Object = Object {
   _pos :: Pos,

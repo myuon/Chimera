@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, FlexibleContexts, ImplicitParams #-}
-module Player where
+module Chimera.Player where
 
 import qualified Graphics.UI.FreeGame as Game
 import Control.Lens
@@ -7,9 +7,9 @@ import Control.Arrow
 import Control.Monad.State
 import Debug.Trace
 
-import Global
-import Object
-import qualified Key
+import Chimera.Global
+import Chimera.Object
+import qualified Chimera.Key as Key
 
 update :: Key.Keys -> Player -> Player
 update key = execState $ do

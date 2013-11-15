@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, FlexibleInstances, UndecidableInstances #-}
-module Field where
+module Chimera.Field where
 
 import qualified Graphics.UI.FreeGame as Game
 import qualified Graphics.UI.FreeGame.GUI.GLFW as GL
@@ -11,11 +11,11 @@ import Control.Monad.State
 import qualified Data.Array as Array
 import qualified Linear.V2 as V2
 import Data.List
-import Global
-import Object
-import qualified Key
-import qualified Player
-import qualified Barrage
+import Chimera.Global
+import Chimera.Object
+import qualified Chimera.Key as Key
+import qualified Chimera.Player as Player
+import qualified Chimera.Barrage as Barrage
 import Debug.Trace
 
 drawBullet :: BulletImg -> Bullet -> Game.Game ()

@@ -8,12 +8,12 @@ import Control.Lens
 import Control.Monad
 import Control.Applicative
 
-import Global
+import Chimera.Global
 import qualified Data.Array as Array
 import qualified Data.Time as Time
-import qualified Object as Obj
-import qualified Key
-import qualified Field
+import qualified Chimera.Object as Obj
+import qualified Chimera.Key as Key
+import qualified Chimera.Field as Field
 
 makeLenses ''Game.GUIParam
 
