@@ -11,7 +11,7 @@ import Global
 
 data Object = Object {
   _pos :: Pos,
-  _speed :: Double,
+  _speed :: Double',
   _counter :: Int
   } deriving (Eq, Show)
 
@@ -25,7 +25,7 @@ data BulletKind = BallLarge | BallMedium | BallSmall |
 data BulletColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
   deriving (Eq, Ord, Enum, Array.Ix, Show)
 
-data BulletMotion = Normal | Rotate Double deriving (Eq, Show)
+data BulletMotion = Normal | Rotate Double' deriving (Eq, Show)
 
 data BarrangeIndex = BPlayer | BZako Int | BBoss Int | BDebug
   deriving (Eq, Show)
@@ -35,7 +35,7 @@ type BulletImg = Array.Array BulletKind
 
 data Bullet = Bullet {
   _objectBullet :: Object,
-  _angle :: Double,
+  _angle :: Double',
   _kindBullet :: BulletKind,
   _color :: BulletColor,
   _barrage :: BarrangeIndex,
@@ -47,10 +47,10 @@ makeLenses ''Bullet
 instance HasObject Bullet where
   object = objectBullet
 
-initBullet :: Pos -> Double -> Double -> BulletKind -> BulletColor -> BarrangeIndex -> Bullet
+initBullet :: Pos -> Double' -> Double' -> BulletKind -> BulletColor -> BarrangeIndex -> Bullet
 initBullet p s ang k c i = Bullet (Object p s 0) ang k c i 0
 
-initBullet' :: Pos -> Double -> Double -> BulletKind -> BulletColor -> BarrangeIndex -> Int -> Bullet
+initBullet' :: Pos -> Double' -> Double' -> BulletKind -> BulletColor -> BarrangeIndex -> Int -> Bullet
 initBullet' p s ang k c i param = Bullet (Object p s 0) ang k c i param
 
 data Chara = Chara {
@@ -63,7 +63,7 @@ makeClassy ''Chara
 instance HasObject Chara where
   object = objectChara
 
-initChara :: Pos -> Double -> Int -> Chara
+initChara :: Pos -> Double' -> Int -> Chara
 initChara p s h = Chara (Object p s 0) h
 
 
@@ -103,6 +103,6 @@ instance HasChara Enemy where
 instance HasObject Enemy where
   object = chara . object
 
-initEnemy :: Pos -> Double -> Int -> BarrangeIndex -> Motion -> Enemy
+initEnemy :: Pos -> Double' -> Int -> BarrangeIndex -> Motion -> Enemy
 initEnemy p s h i m = Enemy (initChara p s h) i [] m Go
 

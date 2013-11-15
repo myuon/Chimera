@@ -1,1 +1,1 @@
-Haskell is so cute.
+I love Haskell. Cute! :)

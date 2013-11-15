@@ -78,7 +78,7 @@ barrage bindex@(BZako 0) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posE = e ^. pos; posP = p ^. pos
       let ang = (fromIntegral $ cnt) / 10
-      let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
+      let pAngle = atan2 ((posE - posP) ^. Game._y) (-(posE - posP) ^. Game._x)
       if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
         let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
         [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
@@ -100,7 +100,7 @@ barrage bindex@(BZako 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
     danmaku e p = do
       let cnt = e ^. counter
       let posP = p ^. pos; posE = e ^. pos
-      let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
+      let pAngle = atan2 ((posE - posP) ^. Game._y) (-(posE - posP) ^. Game._x)
       if_ (cnt `mod` 50 == 0) $ for [1] $ \i -> do
         initBullet posE 2 pAngle BallLarge Blue bindex
 barrage bindex@(BZako 3) = Pattern normalBullet (normalEnemy danmaku) danmaku
@@ -132,7 +132,7 @@ barrage bindex@(BZako 5) = Pattern normalBullet (normalEnemy danmaku) danmaku
       let cnt = e ^. counter
       let posE = e ^. pos; posP = p ^. pos
       let ang = (fromIntegral $ cnt) / 10
-      let pAngle = atan2 ((posE - posP) ^. V2._y) (-(posE - posP) ^. V2._x)
+      let pAngle = atan2 ((posE - posP) ^. Game._y) (-(posE - posP) ^. Gamels._x)
       if_ (cnt `mod` 5 == 0) $ concat $ for [1] $ \i -> do
         let bullet t color = initBullet posE 3 (t + sin ang / 2) BallMedium color bindex
         [bullet pAngle Red, bullet (pAngle + pi/2.5) Green, bullet (pAngle - pi/2.5) Blue]
@@ -147,7 +147,7 @@ barrage bindex@(BBoss 0) = Pattern bullet (normalEnemy danmaku) danmaku
         speed %= (subtract (3.0/100))
       normalBullet
       where
-        fromP :: Int -> Double
+        fromP :: Int -> Double'
         fromP 0 = -1
         fromP 1 = 1
     danmaku :: Enemy -> Player -> [Bullet]
@@ -171,7 +171,7 @@ barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
         speed %= (subtract (3.0/100))
       normalBullet
       where
-        fromP :: Int -> Double
+        fromP :: Int -> Double'
         fromP 0 = -1
         fromP 1 = 1
     danmaku :: Enemy -> Player -> [Bullet]

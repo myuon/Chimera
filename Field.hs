@@ -111,7 +111,7 @@ collideChara c bullet = (,)
     inDist :: Pos -> [Bullet] -> [Bullet]
     inDist p = filter ((< 10.0^2) . dist p . (\b -> b ^. pos))
       where
-        dist :: Pos -> Pos -> Double
+        dist :: Pos -> Pos -> Double'
         dist p q = absV $ (p - q)
 
 updateField :: Key.Keys -> State Field ()

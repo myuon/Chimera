@@ -47,4 +47,4 @@ clamp = fromPair . (edgeX *** edgeY) . toPair
 
 draw :: Game.Bitmap -> Player -> Game.Game ()
 draw img p = do
-  Game.translate (p ^. pos) $ Game.fromBitmap img
+  Game.translate (fmap realToFrac $ p ^. pos) $ Game.fromBitmap img
