@@ -4,7 +4,8 @@ module Chimera.STG.Types (
   , object, chara, hp
   , Bullet, initBullet
   , Enemy, initEnemy
-  , Player, keyState, initPlayer
+  , Player, keys, initPlayer
+  , img
 
   , Pattern'(..)
   , Danmaku
@@ -85,7 +86,8 @@ initChara p sp = Chara Object { _pos = p, _spXY = sp, _speed = undefined, _angle
 
 data Player = Player {
   _charaPlayer :: Chara,
-  _keyState :: Game UI.Keys
+  _keys :: UI.Keys,
+  _img :: Bitmap
   }
 
 makeLenses ''Player
@@ -96,8 +98,10 @@ instance HasChara Player where
 instance HasObject Player where
   object = chara . object
 
-initPlayer :: Player
-initPlayer = Player (initChara (V2 320 420) 2 10) (return UI.initKeys)
+initPlayer :: Bitmap -> Player
+initPlayer = Player 
+  (Chara (Object (V2 320 420) undefined 2 undefined 0) 10)
+  (UI.initKeys)
 
 {-
 data EnemyKind = Oneway | Spiral | Boss Int deriving (Eq, Show)

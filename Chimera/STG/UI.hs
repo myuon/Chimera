@@ -3,6 +3,7 @@ module Chimera.STG.UI (
   Keys(..)
   , space, up, down, right, left, z
   , initKeys
+  , updateKeys
   ) where
 
 import Graphics.UI.FreeGame
@@ -22,15 +23,15 @@ makeLenses ''Keys
 initKeys :: Keys
 initKeys = Keys 0 0 0 0 0 0
 
-update :: Keys -> Game Keys
-update keys = do
+updateKeys :: Keys -> Game Keys
+updateKeys keys = do
   space' <- keySpecial KeySpace
   up' <- keySpecial KeyUp
   down' <- keySpecial KeyDown
   right' <- keySpecial KeyRight
   left' <- keySpecial KeyLeft
   z' <- keyChar 'Z'
-
+  
   return $
     space %~ keyFun space' $
     up %~ keyFun up' $

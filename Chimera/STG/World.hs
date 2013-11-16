@@ -3,7 +3,7 @@ module Chimera.STG.World (
   LookAt, local, global
   , AtEnemy
   , Field
-  , player, enemy, bulletP, bulletE, enemyQ
+  , player, enemy, bulletP, bulletE, enemyQ, resource
   , initField
   ) where
 
@@ -13,6 +13,7 @@ import Control.Lens
 
 import Chimera.STG.Types
 import Chimera.STG.Util
+import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
 data LookAt p q = LookAt {
@@ -29,17 +30,20 @@ data Field = Field {
   _enemy :: [Enemy],
   _bulletP :: [Bullet],
   _bulletE :: [Bullet],
-  _enemyQ :: [(Int, Enemy)]
+  _enemyQ :: [(Int, Enemy)],
+
+  _resource :: Resource
   }
 
 makeLenses ''Field
 
-initField :: Field
-initField = Field {
-  _player = initPlayer,
+initField :: Resource -> Field
+initField res = Field {
+  _player = initPlayer (fst $ res ^. charaImg),
   _enemy = [],
   _bulletP = [],
   _bulletE = [],
-  _enemyQ = [
-    ]
+  _enemyQ = [],
+
+  _resource = res
   }

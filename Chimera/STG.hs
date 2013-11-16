@@ -1,20 +1,26 @@
-{-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances, FlexibleContexts, Rank2Types #-}
 module Chimera.STG (
   update, draw
   
   , module Chimera.STG.World
+  , module Chimera.STG.UI
+  , module Chimera.STG.Types
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Arrow
+import Control.Arrow ((***))
 import Control.Monad.Operational.Mini (interpret)
-import Control.Monad.State (get, execState, evalStateT, State, StateT)
+import Control.Monad.State (get, put, execState, execStateT, evalStateT, runStateT, State, StateT)
 
 import Chimera.STG.Types
 import Chimera.STG.World
 import Chimera.STG.Util
-import qualified Chimera.STG.UI as UI
+import Chimera.Load
+import Chimera.STG.UI
+
+import Control.Monad.Free (MonadFree)
+import Control.Monad.Free.Church (F)
 
 runDanmaku :: Danmaku () -> State AtEnemy ()
 runDanmaku = interpret exec
@@ -23,6 +29,12 @@ exec :: Pattern' x -> State AtEnemy x
 exec Get = use local
 exec (Put e) = local .= e
 
+-- access to methods in superclass
+(./) :: s -> StateT s Game () -> StateT c Game s
+s ./ m = bracket $ m `execStateT` s
+
+-- update the value
+a <.- s = s >>= (\x -> a .= x)
 
 class GUIClass c where
   update :: StateT c Game ()
@@ -30,29 +42,23 @@ class GUIClass c where
 
 instance GUIClass Player where
   update = do
-    p <- get
-    (chara.counter) %= (+1)
-    bracket $ do
-      key <- p ^. keyState
-      updatePlayer key `evalStateT` p
-    
+    s <- use speed
+    k <- use keys
+    counter %= (+1)
+    pos %= clamp . (+ (s $* dir k))
+
     where
-      updatePlayer :: UI.Keys -> StateT Player Game ()
-      updatePlayer key = do
-        s <- use (chara.speed)
-        (chara.pos) %= (+ (s $* dir key))
-        (chara.pos) %= clamp
-      
-      dir :: UI.Keys -> Vec
+      dir :: Keys -> Vec
       dir key = let addTup b p q = bool q (fromPair p+q) b in
-        addTup (key ^. UI.up    > 0) (0,-1) $
-        addTup (key ^. UI.down  > 0) (0,1) $
-        addTup (key ^. UI.right > 0) (1,0) $
-        addTup (key ^. UI.left  > 0) (-1,0) $
+        addTup (key ^. up    > 0) (0,-1) $
+        addTup (key ^. down  > 0) (0,1) $
+        addTup (key ^. right > 0) (1,0) $
+        addTup (key ^. left  > 0) (-1,0) $
         fromPair (0,0)
-  draw =
---    Game.translate (fmap realToFrac $ p ^. pos) $ Game.fromBitmap img
-    embedIO $ putStrLn "drawing player"
+
+  draw = do
+    p <- get
+    translate (p ^. pos) $ fromBitmap (p ^. img)
 
 clamp :: Vec -> Vec
 clamp = fromPair . (edgeX *** edgeY) . toPair
@@ -71,12 +77,8 @@ instance GUIClass Bullet where
 
 instance GUIClass Field where
   update = do
-    f <- get
-    bracket $ do
-      update `evalStateT` (f ^. player)
-      updateEnemies (f ^. enemy) `evalStateT` f
-
-    embedIO $ putStrLn "updating field"
+    p <- use player
+    player <.- (p ./ update)
     
     where
       updateEnemies :: [Enemy] -> StateT Field Game ()
@@ -91,8 +93,8 @@ instance GUIClass Field where
     
   draw = do
     p <- use player
+    res <- use resource
     bracket $ do
       draw `evalStateT` p
-    embedIO $ putStrLn "drawing field"
---    liftUI $ (evalStateT draw) (f ^. player)
+      translate (V2 320 240) $ fromBitmap (res ^. board)
 
