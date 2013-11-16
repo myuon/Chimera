@@ -1,9 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.Key where
+module Chimera.STG.UI (
+  Keys(..)
+  , space, up, down, right, left, z
+  , initKeys
+  ) where
 
-import qualified Graphics.UI.FreeGame as Game
+import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.State
 
 data Keys = Keys {
   _space :: Int,
@@ -19,14 +22,14 @@ makeLenses ''Keys
 initKeys :: Keys
 initKeys = Keys 0 0 0 0 0 0
 
-update :: Keys -> Game.Game Keys
+update :: Keys -> Game Keys
 update keys = do
-  space' <- Game.keySpecial Game.KeySpace
-  up' <- Game.keySpecial Game.KeyUp
-  down' <- Game.keySpecial Game.KeyDown
-  right' <- Game.keySpecial Game.KeyRight
-  left' <- Game.keySpecial Game.KeyLeft
-  z' <- Game.keyChar 'Z'
+  space' <- keySpecial KeySpace
+  up' <- keySpecial KeyUp
+  down' <- keySpecial KeyDown
+  right' <- keySpecial KeyRight
+  left' <- keySpecial KeyLeft
+  z' <- keyChar 'Z'
 
   return $
     space %~ keyFun space' $
@@ -38,7 +41,8 @@ update keys = do
     keys
 
   where
-    keyFun :: Bool -> (Int -> Int)
+    keyFun :: Bool -> Int -> Int
     keyFun True = (+1)
     keyFun False = const 0
+
 
