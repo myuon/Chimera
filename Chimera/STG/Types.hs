@@ -3,6 +3,7 @@ module Chimera.STG.Types (
   pos, spXY, speed, angle, counter
   , object, chara, hp
   , Bullet, initBullet
+  , HasChara, HasObject
   , dindex
   , Enemy, initEnemy
   , Player, keys, initPlayer
@@ -33,23 +34,6 @@ data Object = Object {
   } deriving (Eq, Show)
 
 makeClassy ''Object
-
-{-
-data BulletKind = BallLarge | BallMedium | BallSmall | 
-  Oval | Diamond | Needle | BallFrame | BallTiny
-  deriving (Eq, Ord, Enum, Show)
-  
-data BulletColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
-  deriving (Eq, Ord, Enum, Array.Ix, Show)
-
-data BulletMotion = Normal | Rotate Double' deriving (Eq, Show)
-
-data BarrangeIndex = BPlayer | BZako Int | BBoss Int | BDebug
-  deriving (Eq, Show)
-
-type BulletImg = Array.Array BulletKind
-                (Array.Array BulletColor Game.Bitmap)
--}
 
 class HasImg c where
   img :: Simple Lens c Bitmap

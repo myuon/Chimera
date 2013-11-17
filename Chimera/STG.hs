@@ -115,6 +115,8 @@ instance GUIClass Field where
     bulletE <.- (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos) $ bsE)
     
     addBulletP
+    collideE
+    collideP
 
     f <- get
 --    enemy <.- mapM (\e -> e ./ update) es
@@ -154,3 +156,39 @@ addBulletP = do
 
 lineBullet :: Vec -> Bitmap -> Bullet
 lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r)
+
+collideE :: StateT Field Game ()
+collideE = do
+  es <- use enemy
+  bs <- use bulletP
+  
+  let (es', bs') = run es bs
+  enemy .= es'
+  bulletP .= bs'
+  
+  where
+    run :: [Enemy] -> [Bullet] -> ([Enemy], [Bullet])
+    run [] bs = ([], bs)
+    run (e:es) bs = let
+      (e', bs') = collide e bs
+      (es', bs'') = run es bs' in
+      (e':es', bs'')
+  
+collideP :: StateT Field Game ()
+collideP = do
+  p <- use player
+  bs <- use bulletE
+  
+  let (p', bs') = collide p bs
+  player .= p'
+  bulletE .= bs'
+  
+collide :: (HasChara c, HasObject c) => c -> [Bullet] -> (c, [Bullet])
+collide c bs = (,)
+  (hp %~ (\x -> x - (length bs - length bs')) $ c)
+  bs'
+  
+  where
+    bs' :: [Bullet]
+    bs' = filter (\b -> not $ 15.0^2 > (absV $ (b^.pos) - (c^.pos))) bs
+

@@ -62,7 +62,6 @@ runDanmaku = interpret step
     step (Put e) = local .= e
     step (Shots bs) = (global.bulletE) %= (bs++)
     step GetPlayer = use global >>= \f -> return $ f ^. player
-    step _ = undefined
 
 runStage :: Stage () -> StateT Field Game (Stage ())
 runStage (GetResourceLine :>>= next) = count >> next `fmap` use resource

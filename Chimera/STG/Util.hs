@@ -5,7 +5,7 @@ module Chimera.STG.Util (
   , areaTop, areaLeft, areaBottom, areaRight
   , fromPolar
   , isInside
-  , ($*)
+  , ($*), absV
   ) where
 
 import Graphics.UI.FreeGame
@@ -51,4 +51,4 @@ isInside :: Vec -> Bool
 isInside (V2 a b) = (areaLeft <= a && a <= areaRight) && (areaTop <= b && b <= areaBottom)
 
 absV :: (Num a) => V2 a -> a
-absV v = let v' = v * v in (v'^._x)^2 + (v'^._y)
+absV v = let v' = v * v in (v'^._x) + (v'^._y)
