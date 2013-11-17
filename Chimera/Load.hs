@@ -3,7 +3,8 @@ module Chimera.Load (
   Resource
   , font, charaImg, bulletImg, board
   , load
-  , bulletImgRect
+  , BKind(..), BColor(..)
+  , bulletBitmap
   ) where
 
 import Graphics.UI.FreeGame
@@ -26,7 +27,7 @@ load = do
   r3 <- embedIO $ loadBitmapFromFile "data/img/shot.png"
   b <- embedIO $ loadBitmapFromFile "data/img/board.png"
   
-  return $ Resource {
+  return Resource {
     _font = font,
     _charaImg = (cropBitmap r1 (50,50) (0,0), cropBitmap r2 (32,32) (0,0)),
     _bulletImg = (r3, r3),
@@ -40,8 +41,8 @@ data BKind = BallLarge | BallMedium | BallSmall |
 data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
   deriving (Eq, Ord, Enum, Show)
 
-bulletImgRect :: BKind -> BColor -> Bitmap -> Bitmap
-bulletImgRect b c
+bulletBitmap :: BKind -> BColor -> Bitmap -> Bitmap
+bulletBitmap b c
   | b == BallLarge  = clip (60 * color c) 0 60 60
   | b == BallMedium = clip (30 * color c) 60 30 30
   | b == BallSmall  = clip (20 * color c) 90 20 20

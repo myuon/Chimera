@@ -3,6 +3,8 @@ module Chimera.STG.Util (
   , V2, Vec, Pos
   , fromPair, toPair
   , areaTop, areaLeft, areaBottom, areaRight
+  , fromPolar
+  , isInside
   , ($*)
   ) where
 

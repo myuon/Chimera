@@ -1,22 +1,28 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs #-}
-module Chimera.Barrage where
+{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs, FlexibleContexts #-}
+module Chimera.Barrage (
+  zako
+  ) where
 
-import qualified Graphics.UI.FreeGame as Game
-
-import qualified Linear.V2 as V2
+import Control.Monad.Operational.TH (makeSingletons)
+import Control.Monad
 import Control.Lens
-import Control.Monad.State
 
-import Chimera.Object
-import Chimera.Global
+import Chimera.Load
+import Chimera.STG.Types
+import Chimera.STG.World
 
-import Control.Monad.Operational.Mini
+makeSingletons ''Pattern
 
-zako1 :: Danmaku ()
-zako1 = do
-  enemy <- singleton Get
-  (singleton . Put) $ enemy
-
+zako :: Danmaku ()
+zako = do
+  res <- getResource
+  e <- get
+  put $ counter %~ (+1) $ e
+  let cnt = e ^. counter
+  let ang = (fromIntegral cnt) / 10
+  when (cnt `mod` 10 == 0) $
+    shots $ [initBullet (e^.pos) 0.15 ang
+       (bulletBitmap BallMedium Blue (snd $ res ^. bulletImg))]
 
 {-
 

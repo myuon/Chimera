@@ -1,21 +1,26 @@
-{-# LANGUAGE TemplateHaskell, GADTs #-}
+{-# LANGUAGE TemplateHaskell, GADTs, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.Types (
   pos, spXY, speed, angle, counter
   , object, chara, hp
   , Bullet, initBullet
+  , dindex
   , Enemy, initEnemy
   , Player, keys, initPlayer
   , img
 
-  , Pattern'(..)
-  , Danmaku
+  , getResource
+  , Pattern(..)
+  , Danmaku, DIndex(..)
+  , Line(..), Stage, appear
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini (Program)
+import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
+import Control.Monad.Operational.TH (makeSingletons)
 
 import Chimera.STG.Util
+import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
 data Object = Object {
@@ -46,12 +51,16 @@ type BulletImg = Array.Array BulletKind
                 (Array.Array BulletColor Game.Bitmap)
 -}
 
+class HasImg c where
+  img :: Simple Lens c Bitmap
+
 data Bullet = Bullet {
-  _objectBullet :: Object
+  _objectBullet :: Object,
 --  _kindBullet :: BulletKind,
 --  _color :: BulletColor,
 --  _barrage :: BarrangeIndex,
 --  _param :: Int
+  _imgBullet :: Bitmap
   } deriving (Eq, Show)
 
 makeLenses ''Bullet
@@ -59,16 +68,11 @@ makeLenses ''Bullet
 instance HasObject Bullet where
   object = objectBullet
 
-{-
-initBullet :: Pos -> Double' -> Double' -> BulletKind -> BulletColor -> BarrangeIndex -> Bullet
-initBullet p s ang k c i = Bullet (Object p s 0) ang k c i 0
+instance HasImg Bullet where
+  img = imgBullet
 
-initBullet' :: Pos -> Double' -> Double' -> BulletKind -> BulletColor -> BarrangeIndex -> Int -> Bullet
-initBullet' p s = Bullet (Object p s 0)
--}
-
-initBullet :: Vec -> Double' -> Double' -> Bullet
-initBullet p sp ang = Bullet Object { _pos = p, _spXY = undefined, _speed = sp, _angle = ang, _counter = 0}
+initBullet :: Vec -> Double' -> Double' -> Bitmap -> Bullet
+initBullet p sp ang = Bullet (Object p undefined sp ang 0)
 
 data Chara = Chara {
   _objectChara :: Object,
@@ -87,7 +91,7 @@ initChara p sp = Chara Object { _pos = p, _spXY = sp, _speed = undefined, _angle
 data Player = Player {
   _charaPlayer :: Chara,
   _keys :: UI.Keys,
-  _img :: Bitmap
+  _imgPlayer :: Bitmap
   }
 
 makeLenses ''Player
@@ -98,22 +102,22 @@ instance HasChara Player where
 instance HasObject Player where
   object = chara . object
 
+instance HasImg Player where
+  img = imgPlayer
+
 initPlayer :: Bitmap -> Player
 initPlayer = Player 
   (Chara (Object (V2 320 420) undefined 2 undefined 0) 10)
-  (UI.initKeys)
+  UI.initKeys
 
-{-
-data EnemyKind = Oneway | Spiral | Boss Int deriving (Eq, Show)
-data Motion = Mono Int Int | WaitMono Int deriving (Eq, Show)
-data MotionState = Go | Stay | Back | Dead deriving (Eq, Show)
--}
-
+newtype DIndex = DIndex Int
 
 data Enemy = Enemy {
   _charaEnemy :: Chara,
 --  _kindEnemy :: BarrangeIndex,
-  _shotQ :: [Bullet]
+  _shotQ :: [Bullet],
+  _dindex :: DIndex,
+  _imgEnemy :: Bitmap
 --  _motion :: Motion,
 --  _mstate :: MotionState
   }
@@ -126,18 +130,39 @@ instance HasChara Enemy where
 instance HasObject Enemy where
   object = chara . object
 
-{-
-initEnemy :: Vec -> Double' -> Int -> BarrangeIndex -> Motion -> Enemy
-initEnemy p s h i m = Enemy (initChara p s h) i [] m Go
--}
+instance HasImg Enemy where
+  img = imgEnemy
 
-initEnemy :: Vec -> Vec -> Int -> Enemy
-initEnemy p v hp = Enemy (initChara p v hp) []
+initEnemy :: Vec -> Int -> DIndex -> Bitmap -> Enemy
+initEnemy p hp = Enemy (initChara p 0 hp) []
 
-data Pattern' p where
-  Shots :: [Bullet] -> Pattern' ()
-  GetPlayer :: Pattern' Player
-  Get :: Pattern' Enemy
-  Put :: Enemy -> Pattern' ()
+class HasGetResource c where
+  getResource :: c Resource
 
-type Danmaku = Program Pattern'
+data Pattern p where
+  Shots :: [Bullet] -> Pattern ()
+  GetPlayer :: Pattern Player
+  Get :: Pattern Enemy
+  Put :: Enemy -> Pattern ()
+  GetResourcePattern :: Pattern Resource
+
+type Danmaku = Program Pattern
+
+getResourcePattern :: Danmaku Resource
+getResourcePattern = singleton GetResourcePattern
+
+instance HasGetResource Danmaku where
+  getResource = getResourcePattern
+
+
+data Line p where
+  GetResourceLine :: Line Resource
+  Appear :: Int -> Enemy -> Line ()
+ 
+makeSingletons ''Line
+
+type Stage = ReifiedProgram Line
+
+instance HasGetResource Stage where
+  getResource = getResourceLine
+

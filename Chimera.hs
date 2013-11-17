@@ -3,8 +3,7 @@ module Chimera where
 
 import Graphics.UI.FreeGame
 import Control.Lens
---import Control.Monad.State (evalStateT, execState)
-import Control.Monad.State
+import Control.Monad.State (execStateT)
 
 import qualified Chimera.STG as STG
 import Chimera.Load
@@ -42,11 +41,13 @@ step = do
 
 mainloop :: GameFrame -> Game GameFrame
 mainloop gf = do
-  time' <- embedIO $ getCurrentTime
+  time' <- embedIO getCurrentTime
   let fps' = getFPS $ diffUTCTime time' (gf ^. prevTime)
 
-  STG.draw `evalStateT` (gf ^. field)
-  writeFPS $ "fps:" ++ (show $ fps')
+  STG.draw `execStateT` (gf ^. field)
+  write 20 $ "fps:" ++ show fps'
+  write 40 $ "bulletP:" ++ show (length $ gf ^. field ^. STG.bulletP)
+  write 60 $ "bulletP:" ++ show (length $ gf ^. field ^. STG.bulletE)
   
   f' <- STG.update `execStateT` (gf ^. field)
   keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
@@ -56,22 +57,24 @@ mainloop gf = do
     prevTime .~ time' $
     gf
 
-  where
-    writeFPS :: String -> Game ()
-    writeFPS = translate (V2 0 20) .
+  where  
+    write :: Float -> String -> Game ()
+    write y = translate (V2 0 y) .
                colored white .
                text (gf ^. resource ^. font) 20
 
     getFPS :: (RealFrac a, Fractional a) => a -> Int
-    getFPS diff = floor $ (1 / diff)
+    getFPS diff = floor $ 1 / diff
 
-main :: IO (Maybe a)
-main = runGame start $ do
+game :: IO (Maybe a)
+game = runGame start $ do
   res' <- load
-  time' <- embedIO $ getCurrentTime
+  time' <- embedIO getCurrentTime
+  
+  field' <- STG.loadStage `execStateT` STG.initField res'
   
   run $
-    field .~ STG.initField res' $
+    field .~ field' $
     resource .~ res' $
     prevTime .~ time' $
     initGameFrame

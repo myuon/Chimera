@@ -1,37 +1,41 @@
-{-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances, FlexibleContexts, Rank2Types #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts, Rank2Types #-}
 module Chimera.STG (
-  update, draw
-  
-  , module Chimera.STG.World
-  , module Chimera.STG.UI
-  , module Chimera.STG.Types
+  update, draw, loadStage
+
+  , module M
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Arrow ((***))
-import Control.Monad.Operational.Mini (interpret)
-import Control.Monad.State (get, put, execState, execStateT, evalStateT, runStateT, State, StateT)
+import Control.Monad.State (get, put, execStateT, runStateT, State, StateT)
 
-import Chimera.STG.Types
-import Chimera.STG.World
+import Chimera.STG.Types as M
+import Chimera.STG.World as M
 import Chimera.STG.Util
 import Chimera.Load
-import Chimera.STG.UI
+import Chimera.STG.UI as M
+import Chimera.Barrage
 
-import Control.Monad.Free (MonadFree)
-import Control.Monad.Free.Church (F)
+stage1 :: Stage ()
+stage1 = do
+  res <- getResource
+  appear 100 $ initEnemy (V2 320 200) 20 (DIndex 0) (snd $ res ^. charaImg)
 
-runDanmaku :: Danmaku () -> State AtEnemy ()
-runDanmaku = interpret exec
-
-exec :: Pattern' x -> State AtEnemy x
-exec Get = use local
-exec (Put e) = local .= e
+loadStage :: StateT Field Game ()
+loadStage = do
+  stage .= stage1
+  return ()
 
 -- access to methods in superclass
 (./) :: s -> StateT s Game () -> StateT c Game s
 s ./ m = bracket $ m `execStateT` s
+
+(.#) :: s -> StateT s Game a -> StateT s Game a
+s .# m = do
+  (s', f') <- bracket $ m `runStateT` s
+  put f'
+  return s'
 
 -- update the value
 a <.- s = s >>= (\x -> a .= x)
@@ -46,7 +50,7 @@ instance GUIClass Player where
     k <- use keys
     counter %= (+1)
     pos %= clamp . (+ (s $* dir k))
-
+    
     where
       dir :: Keys -> Vec
       dir key = let addTup b p q = bool q (fromPair p+q) b in
@@ -69,32 +73,84 @@ clamp = fromPair . (edgeX *** edgeY) . toPair
     edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
             (\p -> bool p areaBottom (p > areaBottom))
 
+instance GUIClass Enemy where
+  update = do
+    sp <- use spXY
+    pos %= clamp . (+sp)
+    spXY .= 0
+    counter %= (+1)
+    
+  draw = do
+    p <- get
+    translate (p ^. pos) $ fromBitmap (p ^. img)
+
 instance GUIClass Bullet where
   update = do
-    embedIO $ putStrLn "updating a bullet"
+    r <- use speed
+    t <- use angle
+    pos %= (+ fromPolar (r,t))
+    counter %= (+1)
+
   draw = do
-    embedIO $ putStrLn "drawing a bullet"
+    b <- get
+    translate (b ^. pos) $
+      rotateR (b ^. angle + pi/2) $
+      fromBitmap (b ^. img)
 
 instance GUIClass Field where
   update = do
+    s' <- do
+      s <- use stage
+      f <- get
+      f .# (runStage s)
+    stage .= s'
+    
     p <- use player
+    es <- use enemy
     player <.- (p ./ update)
     
-    where
-      updateEnemies :: [Enemy] -> StateT Field Game ()
-      updateEnemies _ = do
-        enemy %= filter (\e -> e^.hp > 0)
-
---    enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (\(LookAt e _) -> e) $ (execState $ runDanmaku Barrage.zako1) (LookAt e f))
-
-  --  bulletE %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)
-  --  bulletP %= filter (\b -> isInside $ b ^. pos) . map (\b -> (execState $ Barrage.barrage (b ^. barrage) ^. Barrage.bullet) b)  
-  --  enemy %= filter (\e -> e ^. hp > 0 && e ^. mstate /= Dead) . map (\e -> (execState $ (Barrage.barrage (e ^. kindEnemy) ^. Barrage.enemy) p) e)
+    bsP <- use bulletP
+    bsE <- use bulletE
+    bulletP <.- (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos) $ bsP)
+    bulletE <.- (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos) $ bsE)
     
-  draw = do
-    p <- use player
-    res <- use resource
-    bracket $ do
-      draw `evalStateT` p
-      translate (V2 320 240) $ fromBitmap (res ^. board)
+    addBulletP
 
+    f <- get
+--    enemy <.- mapM (\e -> e ./ update) es
+    enemy <.- (mapM updateLookAt $ zipWith LookAt es $ repeat f)
+
+  draw = do
+    res <- use resource
+    p <- use player
+    es <- use enemy
+    bsP <- use bulletP
+    bsE <- use bulletE
+    
+    mapM_ (\b -> b ./ draw) bsE
+    mapM_ (\b -> b ./ draw) bsP
+    mapM_ (\e -> e ./ draw) es
+    p ./ draw
+
+    bracket $ translate (V2 320 240) $ fromBitmap (res ^. board)
+
+updateLookAt :: AtEnemy -> StateT Field Game Enemy
+updateLookAt a = do
+  LookAt e f <- a ./ update'
+  put f
+  return e
+  
+  where
+    update' :: StateT AtEnemy Game ()
+    update' = get >>= \f -> f ./ runDanmaku zako >>= put
+
+addBulletP :: StateT Field Game ()
+addBulletP = do
+  p <- use player
+
+  when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
+    res <- use resource
+    bulletP %= (:) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
+
+lineBullet :: Vec -> Bitmap -> Bullet
+lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r)

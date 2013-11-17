@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Chimera.STG.UI (
   Keys(..)
-  , space, up, down, right, left, z
+  , space, up, down, right, left, zKey
   , initKeys
   , updateKeys
   ) where
@@ -15,7 +15,7 @@ data Keys = Keys {
   _down :: Int,
   _right :: Int,
   _left :: Int,
-  _z :: Int
+  _zKey :: Int
   } deriving (Show)
 
 makeLenses ''Keys
@@ -38,7 +38,7 @@ updateKeys keys = do
     down %~ keyFun down' $
     right %~ keyFun right' $
     left %~ keyFun left' $
-    z %~ keyFun z' $
+    zKey %~ keyFun z' $
     keys
 
   where
