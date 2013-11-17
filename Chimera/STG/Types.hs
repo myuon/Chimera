@@ -94,7 +94,8 @@ initPlayer = Player
   UI.initKeys
 
 data State = Dead | Alive deriving (Eq, Show)
-data Kind = Zako Int deriving (Eq, Show)
+
+data Kind = Zako Int | Boss Int | Debug deriving (Eq, Show)
 
 data Enemy = Enemy {
   _charaEnemy :: Chara,

@@ -30,6 +30,7 @@ initGameFrame = GameFrame {
 
 start :: GUIParam
 start =
+  framePerSecond .~ 60 $
   windowTitle .~ "Chimera" $
   clearColor .~ Color 0 0 0.2 1.0 $
   def
@@ -47,7 +48,8 @@ mainloop gf = do
   STG.draw `execStateT` (gf ^. field)
   write 20 $ "fps:" ++ show fps'
   write 40 $ "bulletP:" ++ show (length $ gf ^. field ^. STG.bulletP)
-  write 60 $ "bulletP:" ++ show (length $ gf ^. field ^. STG.bulletE)
+  write 60 $ "bulletE:" ++ show (length $ gf ^. field ^. STG.bulletE)
+  write 100 $ "enemy:" ++ show (length $ gf ^. field ^. STG.enemy)
   
   f' <- STG.update `execStateT` (gf ^. field)
   keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
