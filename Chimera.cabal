@@ -3,7 +3,7 @@
 
 name:                Chimera
 version:             0.1.0.0
-synopsis:            something fun and new through gaming
+synopsis:             something fun and new through gaming
 -- description:         
 homepage:            https://github.com/myuon/Chimera
 -- license:             
@@ -18,4 +18,9 @@ cabal-version:       >=1.8
 executable Chimera
   -- main-is:             
   -- other-modules:       
-  build-depends:       base ==4.6.*, free-game ==0.9.*, lens ==3.10.*, array ==0.4.*, time ==1.4.*, mtl ==2.1.*, linear ==1.3.*
+  build-depends:     base ==4.6.*
+                   , free-game ==0.9.*
+                   , lens ==3.10.*
+                   , mtl ==2.1.*
+                   , time ==1.4.*
+                   , minioperational ==0.4.*
