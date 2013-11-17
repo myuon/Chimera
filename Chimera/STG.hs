@@ -20,7 +20,24 @@ import Chimera.Barrage
 stage1 :: Stage ()
 stage1 = do
   res <- getResource
-  appear 100 $ initEnemy (V2 320 200) 20 (DIndex 0) (snd $ res ^. charaImg)
+  appear 30 $ initEnemy (V2 320 (-40)) 2 (snd $ res ^. charaImg) (Zako 0)
+  appear 50 $ initEnemy (V2 300 (-40)) 2 (snd $ res ^. charaImg) (Zako 0)
+  appear 70 $ initEnemy (V2 280 (-40)) 2 (snd $ res ^. charaImg) (Zako 0)
+  appear 90 $ initEnemy (V2 260 (-40)) 2 (snd $ res ^. charaImg) (Zako 0)
+  appear 110 $ initEnemy (V2 240 (-40)) 2 (snd $ res ^. charaImg) (Zako 0)
+
+  appear 150 $ initEnemy (V2 220 (-40)) 2 (snd $ res ^. charaImg) (Zako 1)
+  appear 170 $ initEnemy (V2 200 (-40)) 2 (snd $ res ^. charaImg) (Zako 1)
+  appear 190 $ initEnemy (V2 180 (-40)) 2 (snd $ res ^. charaImg) (Zako 1)
+  appear 210 $ initEnemy (V2 160 (-40)) 2 (snd $ res ^. charaImg) (Zako 1)
+  appear 230 $ initEnemy (V2 140 (-40)) 2 (snd $ res ^. charaImg) (Zako 1)
+
+  appear 400 $ initEnemy (V2 300 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
+  appear 420 $ initEnemy (V2 100 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
+  appear 440 $ initEnemy (V2 280 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
+  appear 460 $ initEnemy (V2 120 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
+  appear 480 $ initEnemy (V2 260 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
+  appear 500 $ initEnemy (V2 140 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
 
 loadStage :: StateT Field Game ()
 loadStage = do
@@ -76,9 +93,10 @@ clamp = fromPair . (edgeX *** edgeY) . toPair
 instance GUIClass Enemy where
   update = do
     sp <- use spXY
-    pos %= clamp . (+sp)
-    spXY .= 0
+    pos %= (+sp)
     counter %= (+1)
+    h <- use hp
+    when (h <= 0) $ state .= Dead
     
   draw = do
     p <- get
@@ -106,7 +124,6 @@ instance GUIClass Field where
     stage .= s'
     
     p <- use player
-    es <- use enemy
     player <.- (p ./ update)
     
     bsP <- use bulletP
@@ -119,8 +136,17 @@ instance GUIClass Field where
     collideP
 
     f <- get
---    enemy <.- mapM (\e -> e ./ update) es
-    enemy <.- (mapM updateLookAt $ zipWith LookAt es $ repeat f)
+    es <- use enemy
+    es' <- run es f
+    enemy <.- (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ es')
+    
+    where
+      run :: [Enemy] -> Field -> StateT Field Game [Enemy]
+      run [] _ = return $ []
+      run (e:es) f = do
+        (e', f') <- bracket $ updateLookAt (LookAt e f) `runStateT` f
+        put f'
+        fmap (e':) (run es f')
 
   draw = do
     res <- use resource
@@ -144,18 +170,18 @@ updateLookAt a = do
   
   where
     update' :: StateT AtEnemy Game ()
-    update' = get >>= \f -> f ./ runDanmaku zako >>= put
+    update' = get >>= \f -> f ./ runDanmaku (barrage (f ^. local ^. kind)) >>= put
 
 addBulletP :: StateT Field Game ()
 addBulletP = do
   p <- use player
-
   when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
     res <- use resource
     bulletP %= (:) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
 
-lineBullet :: Vec -> Bitmap -> Bullet
-lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r)
+  where
+    lineBullet :: Vec -> Bitmap -> Bullet
+    lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r)
 
 collideE :: StateT Field Game ()
 collideE = do
@@ -173,7 +199,7 @@ collideE = do
       (e', bs') = collide e bs
       (es', bs'') = run es bs' in
       (e':es', bs'')
-  
+
 collideP :: StateT Field Game ()
 collideP = do
   p <- use player

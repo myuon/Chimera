@@ -1,80 +1,94 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes, GADTs, FlexibleContexts #-}
 module Chimera.Barrage (
-  zako
+  barrage
   ) where
 
-import Control.Monad.Operational.TH (makeSingletons)
+import Graphics.UI.FreeGame
+import Control.Monad.Operational.Mini (singleton)
 import Control.Monad
+import Control.Monad.State (get, put, execStateT, State, StateT)
 import Control.Lens
 
 import Chimera.Load
 import Chimera.STG.Types
 import Chimera.STG.World
+import Chimera.STG.Util
 
-makeSingletons ''Pattern
+shots :: [Bullet] -> Danmaku ()
+shots = singleton . Shots
 
-zako :: Danmaku ()
-zako = do
+getPlayer :: Danmaku Player
+getPlayer = singleton $ GetPlayer
+
+get' :: Danmaku Enemy
+get' = singleton $ Get
+
+put' :: Enemy -> Danmaku ()
+put' = singleton . Put
+
+data Motion = Straight | Affine Vec | Curve Vec
+
+motion :: Motion -> StateT Enemy Danmaku ()
+motion (Straight) = do
+  c <- use counter
+  when (c == 1) $ spXY .= V2 0 1.5
+  when (c == 120) $ spXY .= 0
+  when (c == 220) $ spXY .= V2 0 (-1.5)
+  when (c > 400) $ state .= Dead
+motion (Affine v) = do
+  c <- use counter
+  when (c == 1) $ spXY .= V2 0 1.5
+  when (c == 120) $ spXY .= 0
+  when (c == 220) $ spXY .= v
+  when (c > 400) $ state .= Dead
+motion (Curve acc) = do
+  c <- use counter
+  when (c == 1) $ spXY .= V2 0 3
+  spXY %= (+ acc)
+  when (c > 400) $ state .= Dead
+
+barrage :: Kind -> Danmaku ()
+barrage (Zako n)
+  | 0 <= n && n < 10 = zako n
+  | 10 <= n = zako2 $ n `mod` 10
+
+zako :: Int -> Danmaku ()
+zako n = do
   res <- getResource
-  e <- get
-  put $ counter %~ (+1) $ e
+  e <- get'
+  p <- getPlayer
   let cnt = e ^. counter
-  let ang = (fromIntegral cnt) / 10
-  when (cnt `mod` 10 == 0) $
-    shots $ [initBullet (e^.pos) 0.15 ang
-       (bulletBitmap BallMedium Blue (snd $ res ^. bulletImg))]
+  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
 
+  put' =<< motion (Straight) `execStateT` e
+  when (cnt `mod` 50 == 0 && e ^. spXY == 0) $
+    shots $ [initBullet (e^.pos) 3 ang 
+      (bulletBitmap BallMedium (color n) (snd $ res ^. bulletImg))]
+  
+  where
+    color :: Int -> BColor
+    color 0 = Blue
+    color 1 = Red
+  
+zako2 :: Int -> Danmaku ()
+zako2 n = do
+  res <- getResource
+  e <- get'
+  p <- getPlayer
+  let cnt = e ^. counter
+  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+
+  put' =<< motion (Curve (acc n)) `execStateT` e
+  when (cnt `mod` 50 == 0) $
+    shots $ [initBullet (e^.pos) 3 ang 
+      (bulletBitmap Needle Purple (snd $ res ^. bulletImg))]
+  
+  where
+    acc :: Int -> Vec
+    acc 0 = V2 (-0.05) 0.005
+    acc 1 = V2 0.05 0.005
+  
 {-
-
-data Pattern = Pattern {
-  _bullet :: State Bullet (),
-  _enemy :: Player -> State Enemy (),
-  _danmaku :: Enemy -> Player -> [Bullet]
-  }
-
-makeLenses ''Pattern
-
-if_ :: Bool -> [a] -> [a]
-if_ True = id
-if_ False = const []
-
-for :: [a] -> (a -> b) -> [b]
-for = flip map
-
-moveMState :: MotionState -> Pos -> Pos -> Pos
-moveMState Go v = (+v)
-moveMState Stay v = id
-moveMState Back v = (subtract v)
-
-checkStateMotion :: Motion -> Enemy -> MotionState -> MotionState
-checkStateMotion (Mono go stay) e
-  | e ^. counter == go = const Stay
-  | e ^. counter == go + stay = const Back
-  | go + stay < e ^. counter && not (isInside (e ^. pos)) = const Dead 
-  | otherwise = id
-checkStateMotion (WaitMono go) e
-  | e ^. counter == go = const Stay
-  | otherwise = id
-checkStateMotion _ _ = undefined
-
-normalBullet :: State Bullet ()
-normalBullet = do
-  r <- use speed
-  t <- use angle
-  pos %= (+ fromPolar (r,t))
-  counter %= (+1)
-
-normalEnemy :: (Enemy -> Player -> [Bullet]) -> Player -> State Enemy ()
-normalEnemy danmaku p = do
-  e <- get
-  pos %= moveMState (e ^. mstate) ((e ^. speed) $* fromPair (0,1))
-  counter %= (+1)
-  let m = checkStateMotion (e ^. motion) e $ e ^. mstate
-  when (e ^. mstate == Go && m == Stay) $ do
-    counter .= 0
-  mstate .= m
-  when (e ^. mstate == Stay) $ do
-    shotQ .= danmaku e p
 
 barrage :: BarrangeIndex -> Pattern
 barrage BPlayer = Pattern normalBullet undefined undefined

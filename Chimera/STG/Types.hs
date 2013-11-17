@@ -4,14 +4,14 @@ module Chimera.STG.Types (
   , object, chara, hp
   , Bullet, initBullet
   , HasChara, HasObject
-  , dindex
   , Enemy, initEnemy
+  , state, State(..), kind, Kind(..)
   , Player, keys, initPlayer
   , img
 
   , getResource
   , Pattern(..)
-  , Danmaku, DIndex(..)
+  , Danmaku
   , Line(..), Stage, appear
   ) where
 
@@ -71,7 +71,6 @@ instance HasObject Chara where
 initChara :: Vec -> Vec -> Int -> Chara
 initChara p sp = Chara Object { _pos = p, _spXY = sp, _speed = undefined, _angle = undefined, _counter = 0 }
 
-
 data Player = Player {
   _charaPlayer :: Chara,
   _keys :: UI.Keys,
@@ -94,16 +93,15 @@ initPlayer = Player
   (Chara (Object (V2 320 420) undefined 2 undefined 0) 10)
   UI.initKeys
 
-newtype DIndex = DIndex Int
+data State = Dead | Alive deriving (Eq, Show)
+data Kind = Zako Int deriving (Eq, Show)
 
 data Enemy = Enemy {
   _charaEnemy :: Chara,
---  _kindEnemy :: BarrangeIndex,
   _shotQ :: [Bullet],
-  _dindex :: DIndex,
-  _imgEnemy :: Bitmap
---  _motion :: Motion,
---  _mstate :: MotionState
+  _imgEnemy :: Bitmap,
+  _state :: State,
+  _kind :: Kind
   }
 
 makeLenses ''Enemy
@@ -117,8 +115,8 @@ instance HasObject Enemy where
 instance HasImg Enemy where
   img = imgEnemy
 
-initEnemy :: Vec -> Int -> DIndex -> Bitmap -> Enemy
-initEnemy p hp = Enemy (initChara p 0 hp) []
+initEnemy :: Vec -> Int -> Bitmap -> Kind -> Enemy
+initEnemy p hp b k = Enemy (initChara p 0 hp) [] b Alive k
 
 class HasGetResource c where
   getResource :: c Resource
