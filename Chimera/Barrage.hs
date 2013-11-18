@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell, RankNTypes, GADTs, FlexibleContexts #-}
 module Chimera.Barrage (
-  barrage
+  barrage, runBullet
   ) where
 
 import Graphics.UI.FreeGame
@@ -47,6 +47,24 @@ motion _ (Curve acc) = do
   spXY %= (+ acc)
   when (c > 300) $ state .= Dead
 
+runBullet :: KindBullet -> StateT Bullet Game ()
+runBullet (KindBullet 0) = do
+  r <- use speed
+  t <- use angle
+  pos %= (+ fromPolar (r,t))
+runBullet (KindBullet 1) = do
+  counter %= (+1)
+  cnt <- use counter
+  when (30 < cnt && cnt < 120) $ do
+    p <- use param
+    angle %= (+ (fromP p) * pi/400)
+    speed %= (subtract (3.0/100))
+  runBullet (KindBullet 0)
+  where
+    fromP :: Int -> Double'
+    fromP 0 = -1
+    fromP 1 = 1
+
 barrage :: Kind -> Danmaku ()
 barrage (Zako n)
   | 60 <= n = zako6 $ n `mod` 10
@@ -59,6 +77,9 @@ barrage (Zako n)
 barrage (Boss n) = boss n
 barrage (Debug) = debug
 
+initNormalBullet :: Vec -> Double' -> Double' -> BKind -> BColor -> Resource -> Bullet
+initNormalBullet p sp ang bk bc res = initBullet' p sp ang bk bc res (KindBullet 0) 0
+
 debug :: Danmaku ()
 debug = do
   res <- getResource
@@ -68,8 +89,8 @@ debug = do
   let n = 16
 
   when (cnt `mod` 5 == 0) $
-    shots $ (flip map) [1..n] $ \i -> initBullet (e^.pos) 0.5 (i*2*pi/n + (fromIntegral cnt)/100) 
-      (bulletBitmap BallTiny Red (snd $ res ^. bulletImg))
+    shots $ (flip map) [1..n] $ 
+      \i -> initNormalBullet (e^.pos) 0.5 (i*2*pi/n + (fromIntegral cnt)/100) BallTiny Red res
 
 zako :: Int -> Danmaku ()
 zako n = do
@@ -81,8 +102,7 @@ zako n = do
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
 
   when (cnt `mod` 50 == 0 && e ^. spXY == 0) $
-    shots $ [initBullet (e^.pos) 3 ang 
-      (bulletBitmap BallMedium (color n) (snd $ res ^. bulletImg))]
+    shots $ [initNormalBullet (e^.pos) 3 ang BallMedium (color n) res]
   
   where
     color :: Int -> BColor
@@ -99,8 +119,7 @@ zako2 n = do
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
 
   when (cnt `mod` 50 == 0) $
-    shots $ [initBullet (e^.pos) 3 ang 
-      (bulletBitmap Needle Purple (snd $ res ^. bulletImg))]
+    shots $ [initNormalBullet (e^.pos) 3 ang Needle Purple res]
   
   where
     acc :: Int -> Vec
@@ -118,11 +137,9 @@ zako3 _ = do
   let ang' = (fromIntegral cnt) / 10
 
   when (cnt `mod` 5 == 0 && e ^. spXY == 0) $
-    shots $ [
-      initBullet (e^.pos) 3 (ang + pi/2.5 + sin ang'/2) (bulletBitmap BallMedium Red   (snd $ res ^. bulletImg)),
-      initBullet (e^.pos) 3 (ang          + sin ang'/2) (bulletBitmap BallMedium Green (snd $ res ^. bulletImg)),
-      initBullet (e^.pos) 3 (ang - pi/2.5 + sin ang'/2) (bulletBitmap BallMedium Blue  (snd $ res ^. bulletImg))
-      ]
+    shots $ [initNormalBullet (e^.pos) 3 (ang + pi/2.5 + sin ang'/2) BallMedium Red   res,
+             initNormalBullet (e^.pos) 3 (ang          + sin ang'/2) BallMedium Green res,
+             initNormalBullet (e^.pos) 3 (ang - pi/2.5 + sin ang'/2) BallMedium Blue  res]
 
 zako4 :: Int -> Danmaku ()
 zako4 _ = do
@@ -135,7 +152,7 @@ zako4 _ = do
 
   when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
     shots $ (flip map) [1..10] $ \i ->
-      initBullet (e^.pos + fromPolar (150, offset + i*2*pi/10)) (-0.7) (i*2*pi/10) (bulletBitmap Oval (toEnum $ cnt `mod` 8) (snd $ res ^. bulletImg))
+      initNormalBullet (e^.pos + fromPolar (150, offset + i*2*pi/10)) (-0.7) (i*2*pi/10) Oval (toEnum $ cnt `mod` 8) res
 
 zako5 :: Int -> Danmaku ()
 zako5 _ = do
@@ -148,7 +165,7 @@ zako5 _ = do
 
   when (cnt `mod` 3 == 0 && e ^. spXY == 0) $
     shots $ (flip map) [1] $ \i ->
-      initBullet (e^.pos) 3 ang' (bulletBitmap Needle Green (snd $ res ^. bulletImg))
+      initNormalBullet (e^.pos) 3 ang' Needle Green res
 
 zako6 :: Int -> Danmaku ()
 zako6 _ = do
@@ -164,75 +181,33 @@ zako6 _ = do
   when (cnt `mod` time == 0 && e ^. spXY == 0) $
     shots $ (flip concatMap) [1..innerN] $ \i ->
       let phi = i*strain*pi/innerN - pi/2*(1+strain) in
-      [initBullet (posE + fromPolar (150,  theta - pi/2) + fromPolar (15, phi)) (1.5) phi (bulletBitmap BallSmall Yellow (snd $ res ^. bulletImg)),
-       initBullet (posE + fromPolar (150, -theta - pi/2) + fromPolar (15, phi)) (1.5) phi (bulletBitmap BallSmall Cyan (snd $ res ^. bulletImg))]
+      [initNormalBullet (posE + fromPolar (150,  theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall Yellow res,
+       initNormalBullet (posE + fromPolar (150, -theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall Cyan res]
 
 boss :: Int -> Danmaku ()
-boss _ = undefined
-
-{-
-barrage bindex@(BBoss 0) = Pattern bullet (normalEnemy danmaku) danmaku
-  where
-    bullet :: State Bullet ()
-    bullet = do
-      cnt <- use counter
-      when (30 < cnt && cnt < 120) $ do
-        p <- use param
-        angle %= (+ (fromP p) * pi/400)
-        speed %= (subtract (3.0/100))
-      normalBullet
-      where
-        fromP :: Int -> Double'
-        fromP 0 = -1
-        fromP 1 = 1
-    danmaku :: Enemy -> Player -> [Bullet]
-    danmaku e p = do
-      let cnt = e ^. counter
-      let posE = e ^. pos
-      let innerN = 50
-      if_ (cnt `mod` 90 == 0) $ concat $
-        [[initBullet' posE
-          3.5 (i*2*pi/innerN) Oval Purple bindex 0,
-          initBullet' posE
-          3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
-
-barrage bindex@(BBoss 1) = Pattern bullet (normalEnemy danmaku) danmaku
-  where
-    bullet :: State Bullet ()
-    bullet = do
-      cnt <- use counter
-      when (30 < cnt && cnt < 120) $ do
-        p <- use param
-        angle %= (+ (fromP p) * pi/400)
-        speed %= (subtract (3.0/100))
-      normalBullet
-      where
-        fromP :: Int -> Double'
-        fromP 0 = -1
-        fromP 1 = 1
-    danmaku :: Enemy -> Player -> [Bullet]
-    danmaku e p = do
-      let cnt = e ^. counter
-      let posE = e ^. pos
-      let innerN = 50
-      if_ (cnt `mod` 90 == 0) $ concat $
-        [[initBullet' posE
-          3.5 (i*2*pi/innerN) Oval Purple bindex 0,
-          initBullet' posE
-          3.5 (-i*2*pi/innerN) Oval Purple bindex 1] | i <- [1..innerN]]
-
-barrage bindex@(BBoss 2) = Pattern normalBullet (normalEnemy danmaku) danmaku
-  where
-    danmaku :: Enemy -> Player -> [Bullet]
-    danmaku e p = do
-      let cnt = e ^. counter
-      let posE = e ^. pos
-      let innerN = 16
-      let theta = (fromIntegral cnt)*pi/2
-      if_ (cnt `mod` 15 == 0) $
-        [initBullet posE 2.0 
-        (theta*2*pi/fromIntegral innerN + fromIntegral i*2*pi/fromIntegral innerN)
-        Oval (toEnum $ i `mod` 8) bindex | i <- [1..innerN]]
-barrange _ = undefined
-
--}
+boss 0 = do
+  put' =<< (\e -> motion 500 (Straight) `execStateT` e) =<< get'
+  res <- getResource
+  e <- get'
+  p <- getPlayer
+  let cnt = e ^. counter
+  let posE = e ^. pos
+  let innerN = 50
+  
+  when (cnt `mod` 90 == 0 && e ^. spXY == 0) $
+    shots $ (flip concatMap) [1..innerN] $ \i ->
+      [initBullet' (e^.pos) 3.5 (i*2*pi/innerN) Oval Purple res (KindBullet 1) 0,
+       initBullet' (e^.pos) 3.5 (i*2*pi/innerN) Oval Purple res (KindBullet 1) 1]
+boss 1 = do
+  put' =<< (\e -> motion 500 (Straight) `execStateT` e) =<< get'
+  res <- getResource
+  e <- get'
+  p <- getPlayer
+  let cnt = e ^. counter
+  let posE = e ^. pos
+  let innerN = 16
+  let theta = (fromIntegral cnt)*pi/2
+  
+  when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
+    shots $ (flip concatMap) [1..innerN] $ \i ->
+      [initNormalBullet (e^.pos) 2.0 (theta*2*pi/fromIntegral innerN + fromIntegral i*2*pi/fromIntegral innerN) Oval (toEnum $ i `mod` 8) res]

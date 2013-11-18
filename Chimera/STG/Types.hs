@@ -2,7 +2,7 @@
 module Chimera.STG.Types (
   pos, spXY, speed, angle, counter
   , object, chara, hp
-  , Bullet, initBullet
+  , Bullet, initBullet, initBullet', kindBullet, KindBullet(..), param
   , HasChara, HasObject
   , Enemy, initEnemy
   , state, State(..), kind, Kind(..)
@@ -38,13 +38,15 @@ makeClassy ''Object
 class HasImg c where
   img :: Simple Lens c Bitmap
 
+data KindBullet = KindBullet Int deriving (Eq, Show)
+
 data Bullet = Bullet {
   _objectBullet :: Object,
 --  _kindBullet :: BulletKind,
 --  _color :: BulletColor,
---  _barrage :: BarrangeIndex,
---  _param :: Int
-  _imgBullet :: Bitmap
+  _imgBullet :: Bitmap,
+  _kindBullet :: KindBullet,
+  _param :: Int
   } deriving (Eq, Show)
 
 makeLenses ''Bullet
@@ -55,8 +57,11 @@ instance HasObject Bullet where
 instance HasImg Bullet where
   img = imgBullet
 
-initBullet :: Vec -> Double' -> Double' -> Bitmap -> Bullet
+initBullet :: Vec -> Double' -> Double' -> Bitmap -> KindBullet -> Int -> Bullet
 initBullet p sp ang = Bullet (Object p undefined sp ang 0)
+
+initBullet' :: Vec -> Double' -> Double' -> BKind -> BColor -> Resource -> KindBullet -> Int -> Bullet
+initBullet' p sp ang bk bc res k = initBullet p sp ang (bulletBitmap bk bc (snd $ res^.bulletImg)) k
 
 data Chara = Chara {
   _objectChara :: Object,

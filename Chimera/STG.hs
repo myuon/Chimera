@@ -17,6 +17,8 @@ import Chimera.Load
 import Chimera.STG.UI as M
 import Chimera.Barrage
 
+import Data.Time
+
 stage1 :: Stage ()
 stage1 = do
   res <- getResource
@@ -47,6 +49,10 @@ stage1 = do
 
   appear 1500 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 60)
 
+  appear 2000 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 0)
+
+  appear 2500 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 1)
+
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
@@ -55,7 +61,7 @@ stage2 = do
 stage3 :: Stage ()
 stage3 = do
   res <- getResource
-  appear 30 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 70)
+  appear 30 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 1)
 
 loadStage :: StateT Field Game ()
 loadStage = do
@@ -121,11 +127,7 @@ instance GUIClass Enemy where
     translate (p ^. pos) $ fromBitmap (p ^. img)
 
 instance GUIClass Bullet where
-  update = do
-    r <- use speed
-    t <- use angle
-    pos %= (+ fromPolar (r,t))
-    counter %= (+1)
+  update = use kindBullet >>= runBullet
 
   draw = do
     b <- get
@@ -177,7 +179,7 @@ instance GUIClass Field where
     mapM_ (\b -> b ./ draw) bsP
     mapM_ (\e -> e ./ draw) es
     p ./ draw
-
+    
     bracket $ translate (V2 320 240) $ fromBitmap (res ^. board)
 
 updateLookAt :: AtEnemy -> StateT Field Game Enemy
@@ -199,7 +201,7 @@ addBulletP = do
 
   where
     lineBullet :: Vec -> Bitmap -> Bullet
-    lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r)
+    lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r) (KindBullet 0) 0
 
 collideE :: StateT Field Game ()
 collideE = do
