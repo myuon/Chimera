@@ -11,7 +11,7 @@ module Chimera.STG.World (
 import Graphics.UI.FreeGame
 import Control.Arrow
 import Control.Lens
-import Control.Monad.State (get, put, execStateT, State, StateT)
+import Control.Monad.State.Strict (get, put, modify, execStateT, State, StateT)
 import Control.Monad.Operational.Mini
 
 import Chimera.STG.Types
@@ -44,14 +44,15 @@ initField res = Field {
   _counter = 0
   }
 
-data LookAt p q = LookAt {
+data LookAt p q r = LookAt {
   _local :: p,
-  _global :: q
+  _global :: q,
+  _result :: r
   }
 
 makeLenses ''LookAt
 
-type AtEnemy = LookAt Enemy Field
+type AtEnemy = LookAt Enemy Field [[Bullet]]
 
 runDanmaku :: Danmaku () -> StateT AtEnemy Game ()
 runDanmaku = interpret step
@@ -60,7 +61,7 @@ runDanmaku = interpret step
     step GetResourcePattern = use global >>= \f -> return $ f ^. resource
     step Get = use local
     step (Put e) = local .= e
-    step (Shots bs) = (global.bulletE) %= (bs++)
+    step (Shots bs) = result %= (bs:)
     step GetPlayer = use global >>= \f -> return $ f ^. player
 
 runStage :: Stage () -> StateT Field Game (Stage ())
@@ -72,4 +73,4 @@ runStage line@(Appear n e :>>= next) = count >> use counter >>= (\c ->
 runStage line@(Return _) = return line
 
 count :: StateT Field Game ()
-count = counter %= (+1)
+count = counter `zoom` modify (+1)

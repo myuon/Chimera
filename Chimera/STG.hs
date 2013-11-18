@@ -8,7 +8,7 @@ module Chimera.STG (
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Arrow ((***))
-import Control.Monad.State (get, put, execStateT, runStateT, State, StateT)
+import Control.Monad.State.Strict (get, put, execStateT, evalStateT, runStateT, StateT)
 
 import Chimera.STG.Types as M
 import Chimera.STG.World as M
@@ -137,36 +137,22 @@ instance GUIClass Bullet where
 
 instance GUIClass Field where
   update = do
-    s' <- do
-      s <- use stage
-      f <- get
-      f .# (runStage s)
-    stage .= s'
+    f <- get
+    (s', f') <- (bracket $ runStage (f^.stage) `runStateT` f)
+    put $ stage .~ s' $ f'
     
-    p <- use player
-    player <.- (p ./ update)
-    
-    bsP <- use bulletP
-    bsE <- use bulletE
-    bulletP <.- (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos) $ bsP)
-    bulletE <.- (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos) $ bsE)
+    player `zoom` update
+    bulletP `zoom` (put =<< (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos)) =<< get)
+    bulletE `zoom` (put =<< (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos)) =<< get)
     
     addBulletP
     collideE
     collideP
 
-    f <- get
     es <- use enemy
-    es' <- run es f
-    enemy <.- (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ es')
-    
-    where
-      run :: [Enemy] -> Field -> StateT Field Game [Enemy]
-      run [] _ = return $ []
-      run (e:es) f = do
-        (e', f') <- bracket $ updateLookAt (LookAt e f) `runStateT` f
-        put f'
-        fmap (e':) (run es f')
+    pairs <- ((\f -> mapM (\e -> updateLookAt e f) es) =<< get)
+    enemy `zoom` (put =<< (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ map fst pairs))
+    bulletE %= (++ (concat $ concat $ map snd pairs))
 
   draw = do
     res <- use resource
@@ -182,15 +168,10 @@ instance GUIClass Field where
     
     bracket $ translate (V2 320 240) $ fromBitmap (res ^. board)
 
-updateLookAt :: AtEnemy -> StateT Field Game Enemy
-updateLookAt a = do
-  LookAt e f <- a ./ update'
-  put f
-  return e
-  
-  where
-    update' :: StateT AtEnemy Game ()
-    update' = get >>= \f -> f ./ runDanmaku (barrage (f ^. local ^. kind)) >>= put
+updateLookAt :: Enemy -> Field -> StateT Field Game (Enemy, [[Bullet]])
+updateLookAt e f = do
+  LookAt e' _ r' <- bracket $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
+  return (e', r')
 
 addBulletP :: StateT Field Game ()
 addBulletP = do

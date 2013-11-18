@@ -3,7 +3,7 @@ module Chimera where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.State (execStateT)
+import Control.Monad.State.Strict (execStateT)
 
 import qualified Chimera.STG as STG
 import Chimera.Load

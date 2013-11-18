@@ -6,7 +6,7 @@ module Chimera.Barrage (
 import Graphics.UI.FreeGame
 import Control.Monad.Operational.Mini (singleton)
 import Control.Monad
-import Control.Monad.State (get, put, execStateT, State, StateT)
+import Control.Monad.State.Strict (get, put, execStateT, State, StateT)
 import Control.Lens
 
 import Chimera.Load
