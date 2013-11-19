@@ -9,6 +9,7 @@ import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Arrow ((***))
 import Control.Monad.State.Strict (get, put, execStateT, evalStateT, runStateT, StateT)
+import qualified Data.Vector as V
 
 import Chimera.STG.Types as M
 import Chimera.STG.World as M
@@ -65,21 +66,12 @@ stage3 = do
 
 loadStage :: StateT Field Game ()
 loadStage = do
-  stage .= stage1
+  stage .= stage2
   return ()
 
 -- access to methods in superclass
 (./) :: s -> StateT s Game () -> StateT c Game s
 s ./ m = bracket $ m `execStateT` s
-
-(.#) :: s -> StateT s Game a -> StateT s Game a
-s .# m = do
-  (s', f') <- bracket $ m `runStateT` s
-  put f'
-  return s'
-
--- update the value
-a <.- s = s >>= (\x -> a .= x)
 
 class GUIClass c where
   update :: StateT c Game ()
@@ -140,10 +132,12 @@ instance GUIClass Field where
     f <- get
     (s', f') <- (bracket $ runStage (f^.stage) `runStateT` f)
     put $ stage .~ s' $ f'
+
+    bulletE %= ((V.cons) (initBullet' (V2 0 0) 5 (pi/2) Diamond Red (f^.resource) (KindBullet 0) 0))
     
     player `zoom` update
-    bulletP `zoom` (put =<< (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos)) =<< get)
-    bulletE `zoom` (put =<< (mapM (\b -> b ./ update) . filter (\b -> isInside $ b ^. pos)) =<< get)
+    bulletP `zoom` (put =<< (V.mapM (\b -> b ./ update) . V.filter (\b -> isInside $ b ^. pos)) =<< get)
+    bulletE `zoom` (put =<< (V.mapM (\b -> b ./ update) . V.filter (\b -> isInside $ b ^. pos)) =<< get)
     
     addBulletP
     collideE
@@ -152,7 +146,7 @@ instance GUIClass Field where
     es <- use enemy
     pairs <- ((\f -> mapM (\e -> updateLookAt e f) es) =<< get)
     enemy `zoom` (put =<< (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ map fst pairs))
-    bulletE %= (++ (concat $ concat $ map snd pairs))
+    bulletE %= (V.++ (V.concat . map V.concat $ map snd pairs))
 
   draw = do
     res <- use resource
@@ -161,14 +155,14 @@ instance GUIClass Field where
     bsP <- use bulletP
     bsE <- use bulletE
     
-    mapM_ (\b -> b ./ draw) bsE
-    mapM_ (\b -> b ./ draw) bsP
+    V.mapM_ (\b -> b ./ draw) bsE
+    V.mapM_ (\b -> b ./ draw) bsP
     mapM_ (\e -> e ./ draw) es
     p ./ draw
     
     bracket $ translate (V2 320 240) $ fromBitmap (res ^. board)
 
-updateLookAt :: Enemy -> Field -> StateT Field Game (Enemy, [[Bullet]])
+updateLookAt :: Enemy -> Field -> StateT Field Game (Enemy, [V.Vector Bullet])
 updateLookAt e f = do
   LookAt e' _ r' <- bracket $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
   return (e', r')
@@ -178,7 +172,7 @@ addBulletP = do
   p <- use player
   when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
     res <- use resource
-    bulletP %= (:) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
+    bulletP %= (V.cons) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
 
   where
     lineBullet :: Vec -> Bitmap -> Bullet
@@ -194,12 +188,12 @@ collideE = do
   bulletP .= bs'
   
   where
-    run :: [Enemy] -> [Bullet] -> ([Enemy], [Bullet])
+    run :: [Enemy] -> V.Vector Bullet -> ([Enemy], V.Vector Bullet)
     run [] bs = ([], bs)
     run (e:es) bs = let
-      (e', bs') = collide e bs
-      (es', bs'') = run es bs' in
-      (e':es', bs'')
+        (e', bs') = collide e bs
+        (es', bs'') = run es bs' in
+        (e':es', bs'')
 
 collideP :: StateT Field Game ()
 collideP = do
@@ -210,12 +204,12 @@ collideP = do
   player .= p'
   bulletE .= bs'
   
-collide :: (HasChara c, HasObject c) => c -> [Bullet] -> (c, [Bullet])
+collide :: (HasChara c, HasObject c) => c -> V.Vector Bullet -> (c, V.Vector Bullet)
 collide c bs = (,)
-  (hp %~ (\x -> x - (length bs - length bs')) $ c)
+  (hp %~ (\x -> x - (V.length bs - V.length bs')) $! c)
   bs'
   
   where
-    bs' :: [Bullet]
-    bs' = filter (\b -> not $ 15.0^2 > (absV $ (b^.pos) - (c^.pos))) bs
+    bs' :: V.Vector Bullet
+    bs' = V.filter (\b -> not $ 15.0^2 > (absV $ (b^.pos) - (c^.pos))) bs
 
