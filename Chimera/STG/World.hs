@@ -3,7 +3,7 @@ module Chimera.STG.World (
   LookAt(..), local, global
   , AtEnemy
   , Field
-  , player, enemy, bulletP, bulletE, stage, resource
+  , player, enemy, bulletP, bulletE, stage, resource, counterF
   , initField
   , runDanmaku, runStage
   ) where
@@ -28,7 +28,7 @@ data Field = Field {
 
   _stage :: Stage (),
   _resource :: Resource,
-  _counter :: Int
+  _counterF :: Int
   }
 
 makeLenses ''Field
@@ -42,7 +42,7 @@ initField res = Field {
 
   _stage = return (),
   _resource = res,
-  _counter = 0
+  _counterF = 0
   }
 
 data LookAt p q r = LookAt {
@@ -65,13 +65,14 @@ runDanmaku = interpret step
     step (Shots bs) = result %= ((:) (V.fromList bs))
     step GetPlayer = use global >>= \f -> return $ f ^. player
 
-runStage :: Stage () -> StateT Field Game (Stage ())
-runStage (GetResourceLine :>>= next) = count >> next `fmap` use resource
-runStage line@(Appear n e :>>= next) = count >> use counter >>= (\c ->
+runStage :: Stage () -> StateT (LookAt Int Field (Maybe Enemy)) Game (Stage ())
+runStage (GetResourceLine :>>= next) = count >> next `fmap` use (global.resource)
+runStage line@(Appear n e :>>= next) = count >> use local >>= (\c ->
   case c > n of
-    True -> enemy %= (e:) >> return (next ())
+    True -> result .= (Just e) >> return (next ())
     False -> return line)
 runStage line@(Return _) = return line
 
-count :: StateT Field Game ()
-count = counter `zoom` id %= (+1)
+count :: StateT (LookAt Int Field (Maybe Enemy)) Game ()
+count = local `zoom` id %= (+1)
+--count = counter `zoom` id %= (+1)

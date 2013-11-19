@@ -10,6 +10,7 @@ import Control.Lens
 import Control.Arrow ((***))
 import Control.Monad.State.Strict (get, put, execStateT, evalStateT, runStateT, StateT)
 import qualified Data.Vector as V
+import Control.Monad.Trans.Class (lift)
 
 import Chimera.STG.Types as M
 import Chimera.STG.World as M
@@ -66,16 +67,16 @@ stage3 = do
 
 loadStage :: StateT Field Game ()
 loadStage = do
-  stage .= stage2
+  stage .= stage1
   return ()
 
 -- access to methods in superclass
 (./) :: s -> StateT s Game () -> StateT c Game s
-s ./ m = bracket $ m `execStateT` s
+s ./ m = lift $ m `execStateT` s
 
 class GUIClass c where
   update :: StateT c Game ()
-  draw :: StateT c Game ()
+  draw :: c -> Game ()
 
 instance GUIClass Player where
   update = do
@@ -93,8 +94,7 @@ instance GUIClass Player where
         addTup (key ^. left  > 0) (-1,0) $
         fromPair (0,0)
 
-  draw = do
-    p <- get
+  draw p = do
     translate (p ^. pos) $ fromBitmap (p ^. img)
 
 clamp :: Vec -> Vec
@@ -114,26 +114,26 @@ instance GUIClass Enemy where
     h <- use hp
     when (h <= 0) $ state .= Dead
     
-  draw = do
-    p <- get
+  draw p = do
     translate (p ^. pos) $ fromBitmap (p ^. img)
 
 instance GUIClass Bullet where
   update = use kindBullet >>= runBullet
 
-  draw = do
-    b <- get
-    translate (b ^. pos) $
-      rotateR (b ^. angle + pi/2) $
+  draw b = do
+    translate (b ^. pos) $ rotateR (b ^. angle + pi/2) $
       fromBitmap (b ^. img)
 
 instance GUIClass Field where
   update = do
     f <- get
-    (s', f') <- (bracket $ runStage (f^.stage) `runStateT` f)
-    put $ stage .~ s' $ f'
-
-    bulletE %= ((V.cons) (initBullet' (V2 0 0) 5 (pi/2) Diamond Red (f^.resource) (KindBullet 0) 0))
+    
+    (s', LookAt c' _ me) <- lift $ runStage (f^.stage) `runStateT` (LookAt (f^.counterF) f Nothing)
+    case me of
+      Just e -> enemy %= (e:)
+      Nothing -> return ()
+    counterF .= c'
+    stage .= s'
     
     player `zoom` update
     bulletP `zoom` (put =<< (V.mapM (\b -> b ./ update) . V.filter (\b -> isInside $ b ^. pos)) =<< get)
@@ -144,27 +144,21 @@ instance GUIClass Field where
     collideP
 
     es <- use enemy
-    pairs <- ((\f -> mapM (\e -> updateLookAt e f) es) =<< get)
+    pairs <- ((\f -> mapM (\e -> updateLookAt e f) es) f)
     enemy `zoom` (put =<< (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ map fst pairs))
     bulletE %= (V.++ (V.concat . map V.concat $ map snd pairs))
 
-  draw = do
-    res <- use resource
-    p <- use player
-    es <- use enemy
-    bsP <- use bulletP
-    bsE <- use bulletE
+  draw f = do
+    V.mapM_ (\b -> draw b) (f ^. bulletP)
+    draw (f ^. player)
+    V.mapM_ (\b -> draw b) (f ^. bulletE)
+    mapM_ (\e -> draw e) (f ^. enemy)
     
-    V.mapM_ (\b -> b ./ draw) bsE
-    V.mapM_ (\b -> b ./ draw) bsP
-    mapM_ (\e -> e ./ draw) es
-    p ./ draw
-    
-    bracket $ translate (V2 320 240) $ fromBitmap (res ^. board)
+    translate (V2 320 240) $ fromBitmap (f ^. resource ^. board)
 
 updateLookAt :: Enemy -> Field -> StateT Field Game (Enemy, [V.Vector Bullet])
 updateLookAt e f = do
-  LookAt e' _ r' <- bracket $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
+  LookAt e' _ r' <- lift $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
   return (e', r')
 
 addBulletP :: StateT Field Game ()

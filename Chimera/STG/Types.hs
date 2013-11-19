@@ -146,7 +146,7 @@ instance HasGetResource Danmaku where
 data Line p where
   GetResourceLine :: Line Resource
   Appear :: Int -> Enemy -> Line ()
- 
+
 makeSingletons ''Line
 
 type Stage = ReifiedProgram Line
