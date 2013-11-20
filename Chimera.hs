@@ -3,7 +3,8 @@ module Chimera where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.State (execStateT)
+import Control.Monad.State.Strict (execStateT)
+import qualified Data.Vector as V
 
 import qualified Chimera.STG as STG
 import Chimera.Load
@@ -30,6 +31,7 @@ initGameFrame = GameFrame {
 
 start :: GUIParam
 start =
+  windowRegion .~ BoundingBox 0 0 640 480 $
   framePerSecond .~ 60 $
   windowTitle .~ "Chimera" $
   clearColor .~ Color 0 0 0.2 1.0 $
@@ -45,13 +47,14 @@ mainloop gf = do
   time' <- embedIO getCurrentTime
   let fps' = getFPS $ diffUTCTime time' (gf ^. prevTime)
 
-  STG.draw `execStateT` (gf ^. field)
+  STG.draw (gf ^. field)
   write 20 $ "fps:" ++ show fps'
-  write 40 $ "bulletP:" ++ show (length $ gf ^. field ^. STG.bulletP)
-  write 60 $ "bulletE:" ++ show (length $ gf ^. field ^. STG.bulletE)
+  write 40 $ "bulletP:" ++ show (V.length $ gf ^. field ^. STG.bulletP)
+  write 60 $ "bulletE:" ++ show (V.length $ gf ^. field ^. STG.bulletE)
   write 100 $ "enemy:" ++ show (length $ gf ^. field ^. STG.enemy)
   
-  f' <- STG.update `execStateT` (gf ^. field)
+--  f' <- STG.update `execStateT` (gf ^. field)
+  f' <- STG.update (gf ^. field)
   keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
 
   return $

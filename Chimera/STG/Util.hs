@@ -42,13 +42,14 @@ toPair :: V2 a -> (a,a)
 toPair (V2 a b) = (a,b)
 
 ($*) :: (Num a) => a -> V2 a -> V2 a
-($*) k = fmap (k*)
+($*) = (*^)
 
 fromPolar :: (Double', Double') -> Vec
 fromPolar (r,t) = r $* fromPair (cos (-t), sin (-t))
 
 isInside :: Vec -> Bool
-isInside (V2 a b) = (areaLeft <= a && a <= areaRight) && (areaTop <= b && b <= areaBottom)
+isInside (V2 a b) = (areaLeft-40 <= a && a <= areaRight+40) && (areaTop-40 <= b && b <= areaBottom+40)
 
 absV :: (Num a) => V2 a -> a
-absV v = let v' = v * v in (v'^._x) + (v'^._y)
+--absV v = let v' = v * v in (v'^._x) + (v'^._y)
+absV = quadrance
