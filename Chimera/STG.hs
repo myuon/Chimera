@@ -63,7 +63,7 @@ stage2 = do
 stage3 :: Stage ()
 stage3 = do
   res <- getResource
-  appear 30 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 1)
+  appear 30 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 60)
 
 loadStage :: StateT Field Game ()
 loadStage = do
@@ -75,15 +75,17 @@ loadStage = do
 s ./ m = lift $ m `execStateT` s
 
 class GUIClass c where
-  update :: StateT c Game ()
+  update :: c -> Game c
   draw :: c -> Game ()
 
 instance GUIClass Player where
-  update = do
-    s <- use speed
-    k <- use keys
-    counter %= (+1)
-    pos %= clamp . (+ (s $* dir k))
+  update p = do
+    let s = p ^. speed
+    let k = p ^. keys
+    return $
+      counter %~ (+1) $
+      pos %~ clamp . (+ (s $* dir k)) $
+      p
     
     where
       dir :: Keys -> Vec
@@ -107,47 +109,58 @@ clamp = fromPair . (edgeX *** edgeY) . toPair
             (\p -> bool p areaBottom (p > areaBottom))
 
 instance GUIClass Enemy where
-  update = do
-    sp <- use spXY
-    pos %= (+sp)
-    counter %= (+1)
-    h <- use hp
-    when (h <= 0) $ state .= Dead
+  update e = do
+    let s = if (e^.hp <= 0) then const Dead else id
     
-  draw p = do
-    translate (p ^. pos) $ fromBitmap (p ^. img)
+    return $
+      pos %~ (+ e^.spXY) $
+      counter %~ (+1) $
+      state %~ s $
+      e
+  
+  draw e = do
+    translate (e ^. pos) $ fromBitmap (e ^. img)
 
 instance GUIClass Bullet where
-  update = use kindBullet >>= runBullet
+  update b = runBullet (b^.kindBullet) `execStateT` b
 
   draw b = do
     translate (b ^. pos) $ rotateR (b ^. angle + pi/2) $
       fromBitmap (b ^. img)
 
 instance GUIClass Field where
-  update = do
-    f <- get
-    
-    (s', LookAt c' _ me) <- lift $ runStage (f^.stage) `runStateT` (LookAt (f^.counterF) f Nothing)
-    case me of
-      Just e -> enemy %= (e:)
-      Nothing -> return ()
-    counterF .= c'
-    stage .= s'
-    
-    player `zoom` update
-    bulletP `zoom` (put =<< (V.mapM (\b -> b ./ update) . V.filter (\b -> isInside $ b ^. pos)) =<< get)
-    bulletE `zoom` (put =<< (V.mapM (\b -> b ./ update) . V.filter (\b -> isInside $ b ^. pos)) =<< get)
-    
-    addBulletP
-    collideE
-    collideP
+  update f = do
+    (s', LookAt c' _ me) <- runStage (f^.stage) `runStateT` (LookAt (f^.counterF) f Nothing)
 
-    es <- use enemy
-    pairs <- ((\f -> mapM (\e -> updateLookAt e f) es) f)
-    enemy `zoom` (put =<< (mapM (\e -> e ./ update) . filter (\e -> e ^. state /= Dead) $ map fst pairs))
-    bulletE %= (V.++ (V.concat . map V.concat $ map snd pairs))
+    let es = getEnemy me $ f^.enemy
+    pairs <- mapM (\e -> updateLookAt e f `evalStateT` f) es
+    es' <- (mapM update . filter (\e -> e ^. state /= Dead) $ map fst pairs)
+    let bsE = (V.++ (f^.bulletE)) (V.concat . map V.concat $ map snd pairs)
 
+    p' <- update (f^.player)
+    b <- addBulletP (f^.resource) `evalStateT` p'
+    let bsP = b V.++ (f^.bulletP)
+
+    bsP' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ bsP)
+    bsE' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ bsE)
+
+    (es'', bsP'') <- collideE (es', bsP')
+    (p'', bsE'') <- collideP (p', bsE')
+
+    return $
+      counterF .~ c' $
+      stage .~ s' $
+      player .~ p' $
+      enemy .~ es'' $
+      bulletP .~ bsP'' $
+      bulletE .~ bsE'' $
+      f
+      
+    where
+      getEnemy :: Maybe Enemy -> [Enemy] -> [Enemy]
+      getEnemy (Just e) = (e:)
+      getEnemy (Nothing) = id
+      
   draw f = do
     V.mapM_ (\b -> draw b) (f ^. bulletP)
     draw (f ^. player)
@@ -161,25 +174,21 @@ updateLookAt e f = do
   LookAt e' _ r' <- lift $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
   return (e', r')
 
-addBulletP :: StateT Field Game ()
-addBulletP = do
-  p <- use player
-  when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
-    res <- use resource
-    bulletP %= (V.cons) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
+addBulletP :: Resource -> StateT Player Game (V.Vector Bullet)
+addBulletP res = do
+  p <- get
+  if (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) then
+    return $ V.singleton $ lineBullet (p ^. pos) (fst $ res ^. bulletImg)
+  else
+    return $ V.empty
 
   where
     lineBullet :: Vec -> Bitmap -> Bullet
     lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r) (KindBullet 0) 0
 
-collideE :: StateT Field Game ()
-collideE = do
-  es <- use enemy
-  bs <- use bulletP
-  
-  let (es', bs') = run es bs
-  enemy .= es'
-  bulletP .= bs'
+collideE :: ([Enemy], V.Vector Bullet) -> Game ([Enemy], V.Vector Bullet)
+collideE (es, bs) = do
+  return $ run es bs
   
   where
     run :: [Enemy] -> V.Vector Bullet -> ([Enemy], V.Vector Bullet)
@@ -189,14 +198,10 @@ collideE = do
         (es', bs'') = run es bs' in
         (e':es', bs'')
 
-collideP :: StateT Field Game ()
-collideP = do
-  p <- use player
-  bs <- use bulletE
-  
+collideP :: (Player, V.Vector Bullet) -> Game (Player, V.Vector Bullet)
+collideP (p,bs) = do
   let (p', bs') = collide p bs
-  player .= p'
-  bulletE .= bs'
+  return $ (p', bs')
   
 collide :: (HasChara c, HasObject c) => c -> V.Vector Bullet -> (c, V.Vector Bullet)
 collide c bs = (,)

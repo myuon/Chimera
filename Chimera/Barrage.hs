@@ -86,9 +86,9 @@ debug = do
   e <- get'
   p <- getPlayer
   let cnt = e ^. counter
-  let n = 16
+  let n = 20
 
-  when (cnt `mod` 5 == 0) $
+  when (cnt `mod` 4 == 0) $
     shots $ (flip map) [1..n] $ 
       \i -> initNormalBullet (e^.pos) 0.5 (i*2*pi/n + (fromIntegral cnt)/100) BallTiny Red res
 
@@ -175,12 +175,12 @@ zako6 _ = do
   p <- getPlayer
   let cnt = e ^. counter
   let posE = e ^. pos
-  let time = 15; outerN = 10; innerN = 20; strain = 18/10;
+  let time = 5; outerN = 20; innerN = 15; strain = 1.6;
   let theta = (fromIntegral cnt)*pi/(fromIntegral $ time*outerN) + pi
 
   when (cnt `mod` time == 0 && e ^. spXY == 0) $
     shots $ (flip concatMap) [1..innerN] $ \i ->
-      let phi = i*strain*pi/innerN - pi/2*(1+strain) in
+      let phi = i*strain*pi/innerN - pi/2*(1+strain) + pi in
       [initNormalBullet (posE + fromPolar (150,  theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall Yellow res,
        initNormalBullet (posE + fromPolar (150, -theta - pi/2) + fromPolar (15, phi)) (1.5) phi BallSmall Cyan res]
 
