@@ -1,6 +1,6 @@
-{-# LANGUAGE TemplateHaskell, GADTs, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TemplateHaskell, GADTs #-}
 module Chimera.STG.Types (
-  pos, spXY, speed, angle, counter
+  pos, spXY, speed, angle, counter, size
   , object, chara, hp
   , Bullet, initBullet, initBullet', kindBullet, KindBullet(..), param
   , HasChara, HasObject
@@ -8,17 +8,11 @@ module Chimera.STG.Types (
   , state, State(..), kind, Kind(..)
   , Player, keys, initPlayer
   , img
-
-  , getResource
-  , Pattern(..)
-  , Danmaku
-  , Line(..), Stage, appear
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
-import Control.Monad.Operational.TH (makeSingletons)
 
 import Chimera.STG.Util
 import Chimera.Load
@@ -30,7 +24,8 @@ data Object = Object {
   _speed :: Double',
   _angle :: Double',
   
-  _counter :: Int
+  _counter :: Int,
+  _size :: Vec
   } deriving (Eq, Show)
 
 makeClassy ''Object
@@ -58,7 +53,7 @@ instance HasImg Bullet where
   img = imgBullet
 
 initBullet :: Vec -> Double' -> Double' -> Bitmap -> KindBullet -> Int -> Bullet
-initBullet p sp ang = Bullet (Object p undefined sp ang 0)
+initBullet p sp ang = Bullet (Object p undefined sp ang 0 (V2 3 3))
 
 initBullet' :: Vec -> Double' -> Double' -> BKind -> BColor -> Resource -> KindBullet -> Int -> Bullet
 initBullet' p sp ang bk bc res k = initBullet p sp ang (bulletBitmap bk bc (snd $ res^.bulletImg)) k
@@ -73,8 +68,8 @@ makeClassy ''Chara
 instance HasObject Chara where
   object = objectChara
 
-initChara :: Vec -> Vec -> Int -> Chara
-initChara p sp = Chara Object { _pos = p, _spXY = sp, _speed = undefined, _angle = undefined, _counter = 0 }
+initChara :: Vec -> Vec -> Int -> Vec -> Chara
+initChara p sp h s = Chara (Object p sp undefined undefined 0 s) h
 
 data Player = Player {
   _charaPlayer :: Chara,
@@ -95,7 +90,7 @@ instance HasImg Player where
 
 initPlayer :: Bitmap -> Player
 initPlayer = Player 
-  (Chara (Object (V2 320 420) undefined 2 undefined 0) 10)
+  (Chara (Object (V2 320 420) undefined 2 undefined 0 (V2 5 5)) 10)
   UI.initKeys
 
 data State = Dead | Alive deriving (Eq, Show)
@@ -122,35 +117,5 @@ instance HasImg Enemy where
   img = imgEnemy
 
 initEnemy :: Vec -> Int -> Bitmap -> Kind -> Enemy
-initEnemy p hp b k = Enemy (initChara p 0 hp) [] b Alive k
-
-class HasGetResource c where
-  getResource :: c Resource
-
-data Pattern p where
-  Shots :: [Bullet] -> Pattern ()
-  GetPlayer :: Pattern Player
-  Get :: Pattern Enemy
-  Put :: Enemy -> Pattern ()
-  GetResourcePattern :: Pattern Resource
-
-type Danmaku = Program Pattern
-
-getResourcePattern :: Danmaku Resource
-getResourcePattern = singleton GetResourcePattern
-
-instance HasGetResource Danmaku where
-  getResource = getResourcePattern
-
-
-data Line p where
-  GetResourceLine :: Line Resource
-  Appear :: Int -> Enemy -> Line ()
-
-makeSingletons ''Line
-
-type Stage = ReifiedProgram Line
-
-instance HasGetResource Stage where
-  getResource = getResourceLine
+initEnemy p hp b k = Enemy (initChara p 0 hp (V2 15 15)) [] b Alive k
 
