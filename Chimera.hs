@@ -15,7 +15,7 @@ makeLenses ''GUIParam
 data GameFrame = GameFrame {
   _screenMode :: Int,
   _field :: STG.Field,
-  _resource :: Resource,
+  _font :: Font,
   _prevTime :: UTCTime
   }
 
@@ -25,7 +25,7 @@ initGameFrame :: GameFrame
 initGameFrame = GameFrame {
   _screenMode = 0,
   _field = undefined,
-  _resource = undefined,
+  _font = undefined,
   _prevTime = undefined
   }
 
@@ -53,7 +53,6 @@ mainloop gf = do
   write 60 $ "bulletE:" ++ show (V.length $ gf ^. field ^. STG.bulletE)
   write 100 $ "enemy:" ++ show (length $ gf ^. field ^. STG.enemy)
   
---  f' <- STG.update `execStateT` (gf ^. field)
   f' <- STG.update (gf ^. field)
   keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
 
@@ -64,23 +63,19 @@ mainloop gf = do
 
   where  
     write :: Float -> String -> Game ()
-    write y = translate (V2 0 y) .
-               colored white .
-               text (gf ^. resource ^. font) 20
+    write y = translate (V2 0 y) . colored white . text (gf ^. font) 20
 
     getFPS :: (RealFrac a, Fractional a) => a -> Int
     getFPS diff = floor $ 1 / diff
 
 game :: IO (Maybe a)
 game = runGame start $ do
-  res' <- load
+  font' <- embedIO $ loadFont "data/font/VL-PGothic-Regular.ttf"
   time' <- embedIO getCurrentTime
   
-  field' <- STG.loadStage `execStateT` STG.initField res'
-  
   run $
-    field .~ field' $
-    resource .~ res' $
+    field .~ STG.loadStage STG.initField $
+    font .~ font' $
     prevTime .~ time' $
     initGameFrame
   quit

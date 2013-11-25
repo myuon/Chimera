@@ -4,7 +4,7 @@ module Chimera.STG.World (
   , AtEnemy
   , Field
   , player, enemy, bulletP, bulletE, stage, resource, counterF
-  , initField
+  , initField, loadField
   , runDanmaku, runStage
   ) where
 
@@ -33,17 +33,22 @@ data Field = Field {
 
 makeLenses ''Field
 
-initField :: Resource -> Field
-initField res = Field {
-  _player = initPlayer (fst $ res ^. charaImg),
+initField :: Field
+initField = Field {
+  _player = undefined,
   _enemy = [],
   _bulletP = V.empty,
   _bulletE = V.empty,
 
   _stage = return (),
-  _resource = res,
+  _resource = undefined,
   _counterF = 0
   }
+
+loadField :: Field -> Field
+loadField f =
+  player .~ initPlayer (fst $ (f^.resource)^.charaImg) $
+  f
 
 data LookAt p q r = LookAt {
   _local :: p,

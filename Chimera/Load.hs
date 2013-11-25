@@ -1,17 +1,17 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.Load (
-  Resource
-  , font, charaImg, bulletImg, board
-  , load
+  Resource(..)
+  , charaImg, bulletImg, board
   , BKind(..), BColor(..)
   , bulletBitmap
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Data.Default
+import System.IO.Unsafe (unsafePerformIO)
 
 data Resource = Resource {
-  _font :: Font,
   _charaImg :: (Bitmap, Bitmap),
   _bulletImg :: (Bitmap, Bitmap),
   _board :: Bitmap
@@ -19,20 +19,19 @@ data Resource = Resource {
 
 makeLenses ''Resource
 
-load :: Game Resource
-load = do 
-  font <- embedIO $ loadFont "data/font/VL-PGothic-Regular.ttf"
-  r1 <- embedIO $ loadBitmapFromFile "data/img/player_reimu.png"
-  r2 <- embedIO $ loadBitmapFromFile "data/img/dot_yousei.png"
-  r3 <- embedIO $ loadBitmapFromFile "data/img/shot.png"
-  b <- embedIO $ loadBitmapFromFile "data/img/board.png"
-  
-  return Resource {
-    _font = font,
-    _charaImg = (cropBitmap r1 (50,50) (0,0), cropBitmap r2 (32,32) (0,0)),
-    _bulletImg = (r3, r3),
-    _board = b
-  }
+-- *unsafe*
+instance Default Resource where
+  def = unsafePerformIO $ do
+    r1 <- loadBitmapFromFile "data/img/player_reimu.png"
+    r2 <- loadBitmapFromFile "data/img/dot_yousei.png"
+    r3 <- loadBitmapFromFile "data/img/shot.png"
+    b <- loadBitmapFromFile "data/img/board.png"
+    
+    return Resource {
+      _charaImg = (cropBitmap r1 (50,50) (0,0), cropBitmap r2 (32,32) (0,0)),
+      _bulletImg = (r3, r3),
+      _board = b
+    }
 
 data BKind = BallLarge | BallMedium | BallSmall | 
   Oval | Diamond | Needle | BallFrame | BallTiny

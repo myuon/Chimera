@@ -64,6 +64,13 @@ runBullet (KindBullet 1) = do
     fromP :: Int -> Double'
     fromP 0 = -1
     fromP 1 = 1
+runBullet (KindBullet 2) = do
+  counter %= (+1)
+  cnt <- use counter
+  when (30 < cnt && cnt < 120) $ do
+    angle %= (+ pi/400)
+    speed %= (subtract (1.0/100))
+  runBullet (KindBullet 0)
 
 barrage :: Kind -> Danmaku ()
 barrage (Zako n)
@@ -211,3 +218,16 @@ boss 1 = do
   when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
     shots $ (flip concatMap) [1..innerN] $ \i ->
       [initNormalBullet (e^.pos) 2.0 (theta*2*pi/fromIntegral innerN + fromIntegral i*2*pi/fromIntegral innerN) Oval (toEnum $ i `mod` 8) res]
+boss 2 = do
+  put' =<< (\e -> motion 500 (Straight) `execStateT` e) =<< get'
+  res <- getResource
+  e <- get'
+  p <- getPlayer
+  let cnt = e ^. counter
+  let ang = fromIntegral cnt/10
+  let offset = (fromIntegral cnt) / 10
+  
+  when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
+    shots $ (flip map) [1..10] $ \i ->
+      initBullet' (e^.pos + fromPolar (50, ang+2*pi*i/10)) 1.9 (2*pi*i/10) Oval (toEnum $ cnt `mod` 8) res (KindBullet 2) 0
+
