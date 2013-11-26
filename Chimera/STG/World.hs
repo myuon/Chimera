@@ -1,11 +1,16 @@
-{-# LANGUAGE TemplateHaskell, GADTs, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
   LookAt(..), local, global
   , AtEnemy
-  , Field
-  , player, enemy, bulletP, bulletE, stage, resource, counterF
-  , initField
+  , Field(..)
+  , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug
+  , loadField
   , runDanmaku, runStage
+
+  , getResource
+  , Pattern(..)
+  , Danmaku
+  , Line(..), Stage, appear, wait, appearAt, keeper
   ) where
 
 import Graphics.UI.FreeGame
@@ -13,12 +18,52 @@ import Control.Arrow
 import Control.Lens
 import Control.Monad.State.Strict (get, put, modify, execStateT, State, StateT)
 import Control.Monad.Operational.Mini
+import Control.Monad.Operational.TH (makeSingletons)
 import qualified Data.Vector as V
+import Data.Default
 
 import Chimera.STG.Types
 import Chimera.STG.Util
 import Chimera.Load
 import qualified Chimera.STG.UI as UI
+
+class HasGetResource c where
+  getResource :: c Resource
+
+data Pattern p where
+  Shots :: [Bullet] -> Pattern ()
+  GetPlayer :: Pattern Player
+  Get :: Pattern Enemy
+  Put :: Enemy -> Pattern ()
+  GetResourcePattern :: Pattern Resource
+
+type Danmaku = Program Pattern
+
+getResourcePattern :: Danmaku Resource
+getResourcePattern = singleton GetResourcePattern
+
+instance HasGetResource Danmaku where
+  getResource = getResourcePattern
+
+
+data Line p where
+  GetResourceLine :: Line Resource
+  Appear :: Enemy -> Line ()
+  Wait :: Int -> Line ()
+  Stop :: Line ()
+
+makeSingletons ''Line
+
+type Stage = ReifiedProgram Line
+
+instance HasGetResource Stage where
+  getResource = getResourceLine
+
+appearAt :: Int -> Enemy -> Stage ()
+appearAt n e = wait n >> appear e
+
+keeper :: Enemy -> Stage ()
+keeper e = appear e >> stop
 
 data Field = Field {
   _player :: Player,
@@ -28,22 +73,29 @@ data Field = Field {
 
   _stage :: Stage (),
   _resource :: Resource,
-  _counterF :: Int
+  _counterF :: Int,
+  _isDebug :: Bool
   }
 
 makeLenses ''Field
 
-initField :: Resource -> Field
-initField res = Field {
-  _player = initPlayer (fst $ res ^. charaImg),
-  _enemy = [],
-  _bulletP = V.empty,
-  _bulletE = V.empty,
+instance Default Field where
+  def = Field {
+    _player = undefined,
+    _enemy = [],
+    _bulletP = V.empty,
+    _bulletE = V.empty,
 
-  _stage = return (),
-  _resource = res,
-  _counterF = 0
-  }
+    _stage = return (),
+    _resource = undefined,
+    _counterF = 0,
+    _isDebug = False
+    }
+
+loadField :: Field -> Field
+loadField f =
+  player .~ ((img .~ (fst $ (f^.resource)^.charaImg)) $ def) $
+  f
 
 data LookAt p q r = LookAt {
   _local :: p,
@@ -65,14 +117,13 @@ runDanmaku = interpret step
     step (Shots bs) = result %= ((:) (V.fromList bs))
     step GetPlayer = use global >>= \f -> return $ f ^. player
 
-runStage :: Stage () -> StateT (LookAt Int Field (Maybe Enemy)) Game (Stage ())
-runStage (GetResourceLine :>>= next) = count >> next `fmap` use (global.resource)
-runStage line@(Appear n e :>>= next) = count >> use local >>= (\c ->
-  case c > n of
-    True -> result .= (Just e) >> return (next ())
+runStage :: Stage () -> StateT (LookAt () Field (Maybe Enemy)) Game (Stage ())
+runStage (GetResourceLine :>>= next) = next `fmap` use (global.resource)
+runStage (Appear e :>>= next) = result .= (Just e) >> return (next ())
+runStage line@(Wait n :>>= next) = case n == 0 of
+    True -> return (next ())
+    False -> return (Wait (n-1) :>>= next)
+runStage line@(Stop :>>= next) = use (global.enemy) >>= (\es -> case length es == 0 of
+    True -> return (next ())
     False -> return line)
 runStage line@(Return _) = return line
-
-count :: StateT (LookAt Int Field (Maybe Enemy)) Game ()
-count = local `zoom` id %= (+1)
---count = counter `zoom` id %= (+1)

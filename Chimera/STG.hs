@@ -19,56 +19,19 @@ import Chimera.Load
 import Chimera.STG.UI as M
 import Chimera.Barrage
 
-import Data.Time
-
-stage1 :: Stage ()
-stage1 = do
-  res <- getResource
-  appear 30 $ initEnemy (V2 320 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
-  appear 50 $ initEnemy (V2 300 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
-  appear 70 $ initEnemy (V2 280 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
-  appear 90 $ initEnemy (V2 260 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
-  appear 110 $ initEnemy (V2 240 (-40)) 2 (snd $ res ^. charaImg) (Zako 10)
-
-  appear 150 $ initEnemy (V2 220 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
-  appear 170 $ initEnemy (V2 200 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
-  appear 190 $ initEnemy (V2 180 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
-  appear 210 $ initEnemy (V2 160 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
-  appear 230 $ initEnemy (V2 140 (-40)) 2 (snd $ res ^. charaImg) (Zako 11)
-
-  appear 400 $ initEnemy (V2 300 (-40)) 2 (snd $ res ^. charaImg) (Zako 20)
-  appear 420 $ initEnemy (V2 100 (-40)) 2 (snd $ res ^. charaImg) (Zako 21)
-  appear 440 $ initEnemy (V2 280 (-40)) 2 (snd $ res ^. charaImg) (Zako 20)
-  appear 460 $ initEnemy (V2 120 (-40)) 2 (snd $ res ^. charaImg) (Zako 21)
-  appear 480 $ initEnemy (V2 260 (-40)) 2 (snd $ res ^. charaImg) (Zako 20)
-  appear 500 $ initEnemy (V2 140 (-40)) 2 (snd $ res ^. charaImg) (Zako 21)
-
-  appear 570 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 30)
-
-  appear 870 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 40)
-
-  appear 1170 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 50)
-
-  appear 1500 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 60)
-
-  appear 2000 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 0)
-
-  appear 2500 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Boss 1)
+import Chimera.Scripts.Stage1
 
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
-  appear 30 $ initEnemy (V2 260 240) 2 (snd $ res ^. charaImg) (Debug)
+  keeper $ initEnemy (V2 260 (-40)) 2 res (Zako 60)
 
-stage3 :: Stage ()
-stage3 = do
-  res <- getResource
-  appear 30 $ initEnemy (V2 260 (-40)) 10 (snd $ res ^. charaImg) (Zako 60)
-
-loadStage :: StateT Field Game ()
-loadStage = do
-  stage .= stage1
-  return ()
+loadStage :: Field -> Field
+loadStage f =
+  loadField $
+  resource .~ load1 $
+  stage .~ stage1 $
+  f
 
 -- access to methods in superclass
 (./) :: s -> StateT s Game () -> StateT c Game s
@@ -84,7 +47,7 @@ instance GUIClass Player where
     let k = p ^. keys
     return $
       counter %~ (+1) $
-      pos %~ clamp . (+ (s $* dir k)) $
+      pos %~ clamp . (+ ((bool id (0.5*) (k^.shift > 0) $ s) *^ dir k)) $
       p
     
     where
@@ -130,42 +93,40 @@ instance GUIClass Bullet where
 
 instance GUIClass Field where
   update f = do
-    (s', LookAt c' _ me) <- runStage (f^.stage) `runStateT` (LookAt (f^.counterF) f Nothing)
+    (s', LookAt () _ me) <- runStage (f^.stage) `runStateT` (LookAt () f Nothing)
 
-    let es = getEnemy me $ f^.enemy
-    pairs <- mapM (\e -> updateLookAt e f `evalStateT` f) es
-    es' <- (mapM update . filter (\e -> e ^. state /= Dead) $ map fst pairs)
-    let bsE = (V.++ (f^.bulletE)) (V.concat . map V.concat $ map snd pairs)
+    bsP' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ (f^.bulletP))
+    bsE' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ (f^.bulletE))
 
     p' <- update (f^.player)
-    b <- addBulletP (f^.resource) `evalStateT` p'
-    let bsP = b V.++ (f^.bulletP)
+    let b = addBulletP (f^.resource) p'
 
-    bsP' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ bsP)
-    bsE' <- (V.mapM update . V.filter (\b -> isInside $ b ^. pos) $ bsE)
+    pairs <- mapM (\e -> updateLookAt e f `evalStateT` f) (f^.enemy)
+    es' <- (mapM update . filter (\e -> e ^. state /= Dead) $ map fst pairs)
 
     (es'', bsP'') <- collideE (es', bsP')
-    (p'', bsE'') <- collideP (p', bsE')
+    (p'', bsE'') <- collideP (p', (V.concat . map V.concat $ map snd pairs) V.++ bsE')
 
     return $
-      counterF .~ c' $
+      counterF %~ (+1) $
       stage .~ s' $
       player .~ p' $
-      enemy .~ es'' $
-      bulletP .~ bsP'' $
+      enemy .~ maybe id (:) me es'' $
+      bulletP .~ b V.++ bsP'' $
       bulletE .~ bsE'' $
       f
-      
-    where
-      getEnemy :: Maybe Enemy -> [Enemy] -> [Enemy]
-      getEnemy (Just e) = (e:)
-      getEnemy (Nothing) = id
       
   draw f = do
     V.mapM_ (\b -> draw b) (f ^. bulletP)
     draw (f ^. player)
     V.mapM_ (\b -> draw b) (f ^. bulletE)
     mapM_ (\e -> draw e) (f ^. enemy)
+
+    when (f^.isDebug) $ do
+      V.mapM_ (\b -> colored blue . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletP)
+      (\p -> colored yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
+      V.mapM_ (\b -> colored red . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletE)
+      mapM_ (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f ^. resource ^. board)
 
@@ -174,21 +135,19 @@ updateLookAt e f = do
   LookAt e' _ r' <- lift $ runDanmaku (barrage (e^.kind)) `execStateT` (LookAt e f [])
   return (e', r')
 
-addBulletP :: Resource -> StateT Player Game (V.Vector Bullet)
-addBulletP res = do
-  p <- get
+addBulletP :: Resource -> Player -> (V.Vector Bullet)
+addBulletP res p = do
   if (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) then
-    return $ V.singleton $ lineBullet (p ^. pos) (fst $ res ^. bulletImg)
+    V.singleton $ lineBullet (p ^. pos) (fst $ res ^. bulletImg)
   else
-    return $ V.empty
+    V.empty
 
   where
     lineBullet :: Vec -> Bitmap -> Bullet
     lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r) (KindBullet 0) 0
 
 collideE :: ([Enemy], V.Vector Bullet) -> Game ([Enemy], V.Vector Bullet)
-collideE (es, bs) = do
-  return $ run es bs
+collideE (es, bs) = return $ run es bs
   
   where
     run :: [Enemy] -> V.Vector Bullet -> ([Enemy], V.Vector Bullet)
@@ -199,16 +158,18 @@ collideE (es, bs) = do
         (e':es', bs'')
 
 collideP :: (Player, V.Vector Bullet) -> Game (Player, V.Vector Bullet)
-collideP (p,bs) = do
-  let (p', bs') = collide p bs
-  return $ (p', bs')
+collideP (p,bs) = return $ collide p bs
   
 collide :: (HasChara c, HasObject c) => c -> V.Vector Bullet -> (c, V.Vector Bullet)
 collide c bs = (,)
-  (hp %~ (\x -> x - (V.length bs - V.length bs')) $! c)
+  (hp %~ (\x -> x - (V.length bs - V.length bs')) $ c)
   bs'
   
   where
     bs' :: V.Vector Bullet
-    bs' = V.filter (\b -> not $ 15.0^2 > (absV $ (b^.pos) - (c^.pos))) bs
+    bs' = V.filter (\b -> not $ detect (b^.pos, b^.size) (c^.pos, c^.size)) bs
 
+    detect :: (Vec, Vec) -> (Vec, Vec) -> Bool
+    detect (pos1, size1) (pos2, size2) =
+      let V2 dx dy = fmap abs $ pos1 - pos2; V2 sx sy = size1 + size2 in
+      dx < sx/2 && dy < sy/2

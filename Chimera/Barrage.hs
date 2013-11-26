@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, GADTs, FlexibleContexts #-}
 module Chimera.Barrage (
   barrage, runBullet
   ) where
@@ -26,7 +26,7 @@ get' = singleton $ Get
 put' :: Enemy -> Danmaku ()
 put' = singleton . Put
 
-data Motion = Straight | Affine Vec | Curve Vec
+data Motion = Straight | Affine Vec | Curve Vec | Stay
 
 motion :: Int -> Motion -> StateT Enemy Danmaku ()
 motion stay (Straight) = do
@@ -46,6 +46,10 @@ motion _ (Curve acc) = do
   when (c == 0) $ spXY .= V2 0 3
   spXY %= (+ acc)
   when (c > 300) $ state .= Dead
+motion _ (Stay) = do
+  c <- use counter
+  when (c == 0) $ spXY .= V2 0 1.5
+  when (c == 120) $ spXY .= 0
 
 runBullet :: KindBullet -> StateT Bullet Game ()
 runBullet (KindBullet 0) = do
@@ -64,6 +68,13 @@ runBullet (KindBullet 1) = do
     fromP :: Int -> Double'
     fromP 0 = -1
     fromP 1 = 1
+runBullet (KindBullet 2) = do
+  counter %= (+1)
+  cnt <- use counter
+  when (30 < cnt && cnt < 120) $ do
+    angle %= (+ pi/400)
+    speed %= (subtract (1.0/100))
+  runBullet (KindBullet 0)
 
 barrage :: Kind -> Danmaku ()
 barrage (Zako n)
@@ -82,13 +93,14 @@ initNormalBullet p sp ang bk bc res = initBullet' p sp ang bk bc res (KindBullet
 
 debug :: Danmaku ()
 debug = do
+  put' =<< (\e -> motion 0 Stay `execStateT` e) =<< get'
   res <- getResource
   e <- get'
   p <- getPlayer
   let cnt = e ^. counter
   let n = 20
 
-  when (cnt `mod` 4 == 0) $
+  when (cnt `mod` 4 == 0 && e ^. spXY == 0) $
     shots $ (flip map) [1..n] $ 
       \i -> initNormalBullet (e^.pos) 0.5 (i*2*pi/n + (fromIntegral cnt)/100) BallTiny Red res
 
@@ -186,7 +198,7 @@ zako6 _ = do
 
 boss :: Int -> Danmaku ()
 boss 0 = do
-  put' =<< (\e -> motion 500 (Straight) `execStateT` e) =<< get'
+  put' =<< (\e -> motion 0 Stay `execStateT` e) =<< get'
   res <- getResource
   e <- get'
   p <- getPlayer
@@ -199,7 +211,7 @@ boss 0 = do
       [initBullet' (e^.pos) 3.5 (i*2*pi/innerN) Oval Purple res (KindBullet 1) 0,
        initBullet' (e^.pos) 3.5 (i*2*pi/innerN) Oval Purple res (KindBullet 1) 1]
 boss 1 = do
-  put' =<< (\e -> motion 500 (Straight) `execStateT` e) =<< get'
+  put' =<< (\e -> motion 0 Stay `execStateT` e) =<< get'
   res <- getResource
   e <- get'
   p <- getPlayer
@@ -211,3 +223,16 @@ boss 1 = do
   when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
     shots $ (flip concatMap) [1..innerN] $ \i ->
       [initNormalBullet (e^.pos) 2.0 (theta*2*pi/fromIntegral innerN + fromIntegral i*2*pi/fromIntegral innerN) Oval (toEnum $ i `mod` 8) res]
+boss 2 = do
+  put' =<< (\e -> motion 0 Stay `execStateT` e) =<< get'
+  res <- getResource
+  e <- get'
+  p <- getPlayer
+  let cnt = e ^. counter
+  let ang = fromIntegral cnt/10
+  let offset = (fromIntegral cnt) / 10
+  
+  when (cnt `mod` 15 == 0 && e ^. spXY == 0) $
+    shots $ (flip map) [1..10] $ \i ->
+      initBullet' (e^.pos + fromPolar (50, ang+2*pi*i/10)) 1.9 (2*pi*i/10) Oval (toEnum $ cnt `mod` 8) res (KindBullet 2) 0
+

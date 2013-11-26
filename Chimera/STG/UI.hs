@@ -1,13 +1,13 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Chimera.STG.UI (
   Keys(..)
-  , space, up, down, right, left, zKey
-  , initKeys
+  , space, up, down, right, left, zKey, shift
   , updateKeys
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Data.Default
 
 data Keys = Keys {
   _space :: Int,
@@ -15,13 +15,14 @@ data Keys = Keys {
   _down :: Int,
   _right :: Int,
   _left :: Int,
+  _shift :: Int,
   _zKey :: Int
   } deriving (Show)
 
 makeLenses ''Keys
 
-initKeys :: Keys
-initKeys = Keys 0 0 0 0 0 0
+instance Default Keys where
+  def = Keys 0 0 0 0 0 0 0
 
 updateKeys :: Keys -> Game Keys
 updateKeys keys = do
@@ -30,6 +31,7 @@ updateKeys keys = do
   down' <- keySpecial KeyDown
   right' <- keySpecial KeyRight
   left' <- keySpecial KeyLeft
+  shift' <- keySpecial KeyLeftShift
   z' <- keyChar 'Z'
   
   return $
@@ -39,6 +41,7 @@ updateKeys keys = do
     right %~ keyFun right' $
     left %~ keyFun left' $
     zKey %~ keyFun z' $
+    shift %~ keyFun shift' $
     keys
 
   where
