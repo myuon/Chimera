@@ -24,7 +24,7 @@ import Chimera.Scripts.Stage1
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
-  keeper $ initEnemy (V2 260 (-40)) 2 (snd $ res ^. charaImg) (Zako 60)
+  keeper $ initEnemy (V2 260 (-40)) 2 res (Zako 60)
 
 loadStage :: Field -> Field
 loadStage f =

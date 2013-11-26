@@ -6,7 +6,7 @@ module Chimera.STG.Types (
   , HasChara, HasObject
   , Enemy, initEnemy
   , state, State(..), kind, Kind(..)
-  , Player, keys, initPlayer
+  , Player, keys
   , img
   ) where
 
@@ -31,6 +31,16 @@ data Object = Object {
 
 makeClassy ''Object
 
+instance Default Object where
+  def = Object {
+    _pos = V2 0 0,
+    _spXY = V2 0 0,
+    _speed = 0,
+    _angle = 0,
+    _counter = 0,
+    _size = V2 0 0
+    }
+
 class HasImg c where
   img :: Simple Lens c Bitmap
 
@@ -53,6 +63,14 @@ instance HasObject Bullet where
 instance HasImg Bullet where
   img = imgBullet
 
+instance Default Bullet where
+  def = Bullet {
+    _objectBullet = size .~ V2 3 3 $ def,
+    _imgBullet = undefined,
+    _kindBullet = KindBullet 0,
+    _param = 0
+    }
+
 initBullet :: Vec -> Double' -> Double' -> Bitmap -> KindBullet -> Int -> Bullet
 initBullet p sp ang = Bullet (Object p undefined sp ang 0 (V2 3 3))
 
@@ -68,6 +86,12 @@ makeClassy ''Chara
 
 instance HasObject Chara where
   object = objectChara
+
+instance Default Chara where
+  def = Chara {
+    _objectChara = def,
+    _hp = 0
+    }
 
 initChara :: Vec -> Vec -> Int -> Vec -> Chara
 initChara p sp h s = Chara (Object p sp undefined undefined 0 s) h
@@ -89,10 +113,17 @@ instance HasObject Player where
 instance HasImg Player where
   img = imgPlayer
 
-initPlayer :: Bitmap -> Player
-initPlayer = Player 
-  (Chara (Object (V2 320 420) undefined 5 undefined 0 (V2 5 5)) 10)
-  def
+instance Default Player where
+  def = Player {
+    _charaPlayer =
+      pos .~ V2 320 420 $ 
+      speed .~ 2.5 $
+      size .~ V2 5 5 $
+      hp .~ 10 $
+      def,
+    _keys = def,
+    _imgPlayer = undefined
+    }
 
 data State = Dead | Alive deriving (Eq, Show)
 
@@ -117,6 +148,22 @@ instance HasObject Enemy where
 instance HasImg Enemy where
   img = imgEnemy
 
-initEnemy :: Vec -> Int -> Bitmap -> Kind -> Enemy
-initEnemy p hp b k = Enemy (initChara p 0 hp (V2 15 15)) [] b Alive k
+instance Default Enemy where
+  def = Enemy {
+    _charaEnemy =
+      spXY .~ V2 0 0 $
+      size .~ V2 15 15 $
+      def,
+    _shotQ = [],
+    _imgEnemy = undefined,
+    _state = Alive,
+    _kind = undefined
+    }
 
+initEnemy :: Vec -> Int -> Resource -> Kind -> Enemy
+initEnemy p h res k =
+  pos .~ p $
+  hp .~ h $
+  img .~ (snd $ res^.charaImg) $
+  kind .~ k $
+  def

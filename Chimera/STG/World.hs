@@ -94,7 +94,7 @@ instance Default Field where
 
 loadField :: Field -> Field
 loadField f =
-  player .~ initPlayer (fst $ (f^.resource)^.charaImg) $
+  player .~ ((img .~ (fst $ (f^.resource)^.charaImg)) $ def) $
   f
 
 data LookAt p q r = LookAt {
