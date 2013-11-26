@@ -5,7 +5,7 @@ module Chimera.STG.Util (
   , areaTop, areaLeft, areaBottom, areaRight
   , fromPolar
   , isInside
-  , ($*), absV
+  , boxVertex
   ) where
 
 import Graphics.UI.FreeGame
@@ -21,19 +21,8 @@ areaLeft = 32 :: Double'
 areaBottom = 444 :: Double'
 areaRight = 416 :: Double'
 
--- import Control.Bool
-bool :: a -> a -> Bool -> a
-bool x _ False = x
-bool _ y True = y
-
 type Vec = V2 Double'
 type Pos = V2 Int
-
-toNum :: Pos -> Vec
-toNum = fmap fromIntegral
-
-toInt :: Vec -> Pos
-toInt = fmap truncate
 
 fromPair :: (a,a) -> V2 a
 fromPair = uncurry V2
@@ -41,15 +30,14 @@ fromPair = uncurry V2
 toPair :: V2 a -> (a,a)
 toPair (V2 a b) = (a,b)
 
-($*) :: (Num a) => a -> V2 a -> V2 a
-($*) = (*^)
-
 fromPolar :: (Double', Double') -> Vec
-fromPolar (r,t) = r $* fromPair (cos (-t), sin (-t))
+fromPolar (r,t) = r *^ fromPair (cos (-t), sin (-t))
 
 isInside :: Vec -> Bool
 isInside (V2 a b) = (areaLeft-40 <= a && a <= areaRight+40) && (areaTop-40 <= b && b <= areaBottom+40)
 
-absV :: (Num a) => V2 a -> a
---absV v = let v' = v * v in (v'^._x) + (v'^._y)
-absV = quadrance
+boxVertex :: Vec -> Vec -> [Vec]
+boxVertex pos size = [pos - size,
+                      pos + V2 (size^._x) (-size^._y),
+                      pos + size,
+                      pos + V2 (-size^._x) (size^._y)]

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes, GADTs, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, GADTs, FlexibleContexts #-}
 module Chimera.Barrage (
   barrage, runBullet
   ) where

@@ -30,7 +30,7 @@ loadStage :: Field -> Field
 loadStage f =
   loadField $
   resource .~ load1 $
-  stage .~ stage2 $
+  stage .~ stage1 $
   f
 
 -- access to methods in superclass
@@ -47,7 +47,7 @@ instance GUIClass Player where
     let k = p ^. keys
     return $
       counter %~ (+1) $
-      pos %~ clamp . (+ (s $* dir k)) $
+      pos %~ clamp . (+ ((bool id (0.5*) (k^.shift > 0) $ s) *^ dir k)) $
       p
     
     where
@@ -121,6 +121,12 @@ instance GUIClass Field where
     draw (f ^. player)
     V.mapM_ (\b -> draw b) (f ^. bulletE)
     mapM_ (\e -> draw e) (f ^. enemy)
+
+    when (f^.isDebug) $ do
+      V.mapM_ (\b -> colored blue . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletP)
+      (\p -> colored yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
+      V.mapM_ (\b -> colored red . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletE)
+      mapM_ (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f ^. resource ^. board)
 
@@ -141,8 +147,7 @@ addBulletP res p = do
     lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r) (KindBullet 0) 0
 
 collideE :: ([Enemy], V.Vector Bullet) -> Game ([Enemy], V.Vector Bullet)
-collideE (es, bs) = do
-  return $ run es bs
+collideE (es, bs) = return $ run es bs
   
   where
     run :: [Enemy] -> V.Vector Bullet -> ([Enemy], V.Vector Bullet)
@@ -153,9 +158,7 @@ collideE (es, bs) = do
         (e':es', bs'')
 
 collideP :: (Player, V.Vector Bullet) -> Game (Player, V.Vector Bullet)
-collideP (p,bs) = do
-  let (p', bs') = collide p bs
-  return $ (p', bs')
+collideP (p,bs) = return $ collide p bs
   
 collide :: (HasChara c, HasObject c) => c -> V.Vector Bullet -> (c, V.Vector Bullet)
 collide c bs = (,)

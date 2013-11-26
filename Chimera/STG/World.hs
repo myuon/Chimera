@@ -3,8 +3,8 @@ module Chimera.STG.World (
   LookAt(..), local, global
   , AtEnemy
   , Field(..)
-  , player, enemy, bulletP, bulletE, stage, resource, counterF
-  , initField, loadField
+  , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug
+  , loadField
   , runDanmaku, runStage
 
   , getResource
@@ -20,6 +20,7 @@ import Control.Monad.State.Strict (get, put, modify, execStateT, State, StateT)
 import Control.Monad.Operational.Mini
 import Control.Monad.Operational.TH (makeSingletons)
 import qualified Data.Vector as V
+import Data.Default
 
 import Chimera.STG.Types
 import Chimera.STG.Util
@@ -72,22 +73,24 @@ data Field = Field {
 
   _stage :: Stage (),
   _resource :: Resource,
-  _counterF :: Int
+  _counterF :: Int,
+  _isDebug :: Bool
   }
 
 makeLenses ''Field
 
-initField :: Field
-initField = Field {
-  _player = undefined,
-  _enemy = [],
-  _bulletP = V.empty,
-  _bulletE = V.empty,
+instance Default Field where
+  def = Field {
+    _player = undefined,
+    _enemy = [],
+    _bulletP = V.empty,
+    _bulletE = V.empty,
 
-  _stage = return (),
-  _resource = undefined,
-  _counterF = 0
-  }
+    _stage = return (),
+    _resource = undefined,
+    _counterF = 0,
+    _isDebug = False
+    }
 
 loadField :: Field -> Field
 loadField f =

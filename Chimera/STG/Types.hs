@@ -13,6 +13,7 @@ module Chimera.STG.Types (
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
+import Data.Default
 
 import Chimera.STG.Util
 import Chimera.Load
@@ -90,8 +91,8 @@ instance HasImg Player where
 
 initPlayer :: Bitmap -> Player
 initPlayer = Player 
-  (Chara (Object (V2 320 420) undefined 2 undefined 0 (V2 5 5)) 10)
-  UI.initKeys
+  (Chara (Object (V2 320 420) undefined 5 undefined 0 (V2 5 5)) 10)
+  def
 
 data State = Dead | Alive deriving (Eq, Show)
 

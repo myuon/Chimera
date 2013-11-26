@@ -5,6 +5,7 @@ import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (execStateT)
 import qualified Data.Vector as V
+import Data.Default
 
 import qualified Chimera.STG as STG
 import Chimera.Load
@@ -74,7 +75,7 @@ game = runGame start $ do
   time' <- embedIO getCurrentTime
   
   run $
-    field .~ STG.loadStage STG.initField $
+    field .~ STG.loadStage (STG.isDebug .~ False $ def) $
     font .~ font' $
     prevTime .~ time' $
     initGameFrame
