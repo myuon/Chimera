@@ -3,8 +3,8 @@ module Chimera where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (execStateT)
-import qualified Data.Vector as V
+import Control.Monad.State.Strict (execState)
+import qualified Data.Sequence as S
 import Data.Default
 
 import qualified Chimera.STG as STG
@@ -50,13 +50,13 @@ mainloop gf = do
 
   STG.draw (gf ^. field)
   write 20 $ "fps:" ++ show fps'
-  write 40 $ "bulletP:" ++ show (V.length $ gf ^. field ^. STG.bulletP)
-  write 60 $ "bulletE:" ++ show (V.length $ gf ^. field ^. STG.bulletE)
+  write 40 $ "bulletP:" ++ show (S.length $ gf ^. field ^. STG.bulletP)
+  write 60 $ "bulletE:" ++ show (S.length $ gf ^. field ^. STG.bulletE)
   write 100 $ "enemy:" ++ show (length $ gf ^. field ^. STG.enemy)
   
-  f' <- STG.update (gf ^. field)
+  let f' = STG.update `execState` (gf ^. field)
   keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
-
+  
   return $
     field .~ (STG.player . STG.keys .~ keys' $ f') $
     prevTime .~ time' $

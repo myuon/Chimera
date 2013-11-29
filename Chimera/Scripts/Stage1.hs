@@ -1,14 +1,20 @@
 module Chimera.Scripts.Stage1 (
-  load1, stage1
+  load1, stage1, zako
+  , doBullet
   )
   where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Control.Monad
+import Control.Monad.Operational.Mini
+import Control.Monad.State.Strict (get, put, execStateT, State, StateT)
+
 import Chimera.STG.Util
 import Chimera.STG.Types
 import Chimera.STG.World
 import Chimera.Load
+import Chimera.Scripts
 
 load1 :: Resource
 load1 = def
@@ -17,41 +23,17 @@ stage1 :: Stage ()
 stage1 = do
   res <- getResource
 
-  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res (Zako 10)
-  appearAt 20 $ initEnemy (V2 300 (-40)) 2 res (Zako 10)
-  appearAt 20 $ initEnemy (V2 280 (-40)) 2 res (Zako 10)
-  appearAt 20 $ initEnemy (V2 260 (-40)) 2 res (Zako 10)
-  appearAt 20 $ initEnemy (V2 240 (-40)) 2 res (Zako 10)
-  
-  wait 30
+  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res (Zako 1 10)
 
-  appearAt 20 $ initEnemy (V2 220 (-40)) 2 res (Zako 11)
-  appearAt 20 $ initEnemy (V2 200 (-40)) 2 res (Zako 11)
-  appearAt 20 $ initEnemy (V2 180 (-40)) 2 res (Zako 11)
-  appearAt 20 $ initEnemy (V2 160 (-40)) 2 res (Zako 11)
-  appearAt 20 $ initEnemy (V2 140 (-40)) 2 res (Zako 11)
-  
-  wait 30
+zako :: Int -> Danmaku ()
+zako n
+  | n >= 20 = zakoCommon 0 (motionCommon 100 (Curve (acc $ n `mod` 10))) 50 Needle Purple
+  | n >= 10 = zakoCommon 0 (motionCommon 100 (Straight)) 50 BallMedium (toEnum $ n `mod` 10)
+  | otherwise = return ()
+  where
+    acc :: Int -> Vec
+    acc 0 = V2 (-0.05) 0.005
+    acc 1 = V2 0.05 0.005
 
-  appearAt 20 $ initEnemy (V2 300 (-40)) 2 res (Zako 20)
-  appearAt 20 $ initEnemy (V2 100 (-40)) 2 res (Zako 21)
-  appearAt 20 $ initEnemy (V2 280 (-40)) 2 res (Zako 20)
-  appearAt 20 $ initEnemy (V2 120 (-40)) 2 res (Zako 21)
-  appearAt 20 $ initEnemy (V2 260 (-40)) 2 res (Zako 20)
-  appearAt 20 $ initEnemy (V2 140 (-40)) 2 res (Zako 21)
-  
-  wait 30
-  
-  appearAt 20 $ initEnemy (V2 260 (-40)) 10 res (Zako 30)
-  appearAt 300 $ initEnemy (V2 260 (-40)) 10 res (Zako 40)
-  appearAt 300 $ initEnemy (V2 260 (-40)) 10 res (Zako 50)
-  appearAt 300 $ initEnemy (V2 260 (-40)) 10 res (Zako 60)
-  
-  wait 500
-
-  keeper $ initEnemy (V2 260 (-40)) 10 res (Boss 0)
-
-  wait 20
-
-  keeper $ initEnemy (V2 260 (-40)) 10 res (Boss 1)
-
+doBullet :: Int -> State Bullet ()
+doBullet 0 = doBulletCommon 0
