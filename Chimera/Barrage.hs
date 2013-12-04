@@ -1,6 +1,6 @@
 {-# LANGUAGE RankNTypes, GADTs, FlexibleContexts #-}
 module Chimera.Barrage (
-  barrage, runBullet
+  barrage
   ) where
 
 import Graphics.UI.FreeGame
@@ -21,11 +21,6 @@ barrage :: KindEnemy -> Danmaku ()
 barrage (Zako s n)
   | s == 1 = Stage1.zako n
   | otherwise = return ()
---barrage (Boss n) = boss n
+barrage (Boss _ n) = Stage1.boss n
 barrage (Debug) = Scripts.debug
-
-runBullet :: KindBullet -> State Bullet ()
-runBullet (KindBullet s n)
-  | s == 0 = Scripts.doBulletCommon n
-  | s == 1 = Stage1.doBullet n
 

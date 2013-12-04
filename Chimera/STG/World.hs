@@ -1,7 +1,6 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
-  LookAt(..), local, global
-  , AtEnemy
+  AtEnemy
   , Field(..)
   , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug
   , loadField
@@ -29,13 +28,6 @@ import qualified Chimera.STG.UI as UI
 
 class HasGetResource c where
   getResource :: c Resource
-
-data LookAt p q = LookAt {
-  _local :: p,
-  _global :: q
-  }
-
-makeLenses ''LookAt
 
 data Line p where
   GetResourceLine :: Line Resource

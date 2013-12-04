@@ -20,6 +20,7 @@ import Chimera.Load
 import Chimera.STG.UI as M
 import Chimera.Barrage
 
+import Chimera.Scripts
 import Chimera.Scripts.Stage1
 
 stage2 :: Stage ()
@@ -30,20 +31,20 @@ stage2 = do
 loadStage :: Field -> Field
 loadStage f =
   loadField $
-  stage .~ stage2 $
+  stage .~ stage1 $
   resource .~ load1 $
   f
 
 class GUIClass c where
   update :: State c ()
-  draw :: c -> Game ()
+  draw :: StateT c Game ()
 
 instance GUIClass Player where
   update = do
     s <- use speed
     k <- use keys
     counter %= (+1)
-    pos %= clamp . (+ (s *^ dir k))
+    pos %= clamp . (+ (bool id (0.5*^) (k^.shift>0) $ s *^ dir k))
 
     where
       dir :: Keys -> Vec
@@ -54,7 +55,8 @@ instance GUIClass Player where
         addTup (key ^. left  > 0) (-1,0) $
         fromPair (0,0)
 
-  draw p = do
+  draw = do
+    p <- get
     translate (p ^. pos) $ fromBitmap (p ^. img)
 
 clamp :: Vec -> Vec
@@ -74,15 +76,18 @@ instance GUIClass Enemy where
     h <- use hp
     when (h <= 0) $ stateEnemy .= Dead
   
-  draw e = do
+  draw = do
+    e <- get
     translate (e ^. pos) $ fromBitmap (e ^. img)
 
 instance GUIClass Bullet where
-  update = use kindBullet >>= runBullet
+  update = do
+    b <- get
+    bulletObject %= execState (b^.runAuto)
 
-  draw b = do
-    translate (b ^. pos) $ rotateR (b ^. angle + pi/2) $
-      fromBitmap (b ^. img)
+  draw = do
+    b <- get
+    translate (b ^. pos) $ rotateR (b ^. angle + pi/2) $ fromBitmap (b ^. img)
 
 instance GUIClass Field where
   update = do
@@ -90,12 +95,6 @@ instance GUIClass Field where
     collideE
     collideP
     
-    -- move
-    bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
-    bulletE %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
-    enemy %= fmap (execState update) . filter (\e -> e^.stateEnemy /= Dead)
-    player %= execState update
-
     -- append
     f <- get
     let (s', LookAt me _) = runStage (f^.stage) `runState` (LookAt Nothing f)
@@ -112,11 +111,18 @@ instance GUIClass Field where
     f <- get
     enemy %= fmap (\e -> (^.local) $ runDanmaku (barrage (e^.kindEnemy)) `execState` LookAt e f)
     
-  draw f = do
-    mapM_' (\b -> draw b) (f^.bulletP)
-    draw (f ^. player)
-    mapM_' (\b -> draw b) (f^.bulletE)
-    mapM_ (\e -> draw e) (f^.enemy)
+    -- move
+    bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
+    bulletE %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
+    enemy %= fmap (execState update) . filter (\e -> e^.stateEnemy /= Dead)
+    player %= execState update
+
+  draw = do
+    f <- get
+    mapM_' (\p -> lift $ draw `execStateT` p) (f^.bulletP)
+    lift $ draw `execStateT` (f ^. player)
+    mapM_' (\b -> lift $ draw `execStateT` b) (f^.bulletE)
+    mapM_ (\e -> lift $ draw `execStateT` e) (f^.enemy)
 
     when (f^.isDebug) $ do
       mapM_' (\b -> colored blue . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletP)
@@ -138,11 +144,12 @@ addBulletP = do
   p <- use player
   when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
     res <- use resource
-    bulletP %= (<|) (lineBullet (p ^. pos) (fst $ res ^. bulletImg))
-
-  where
-    lineBullet :: Vec -> Bitmap -> Bullet
-    lineBullet p r = initBullet p 5 (pi/2) (bulletBitmap Diamond Red r) (KindBullet 0 0) 0
+    bulletP %= (<|) (
+      pos .~ (p^.pos) $ 
+      speed .~ 5 $ 
+      angle .~ pi/2 $ 
+      img .~ (bulletBitmap Diamond Red (snd $ res^.bulletImg)) 
+      $ def)
 
 collideE :: State Field ()
 collideE = do

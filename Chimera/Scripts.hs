@@ -1,9 +1,9 @@
 module Chimera.Scripts (
   shots, getPlayer, get', put'
+  , initEnemy
   , MotionCommon(..)
   , motionCommon
   , zakoCommon
-  , doBulletCommon
   , debug
   ) where
 
@@ -29,6 +29,14 @@ get' = singleton $ Get
 
 put' :: Enemy -> Danmaku ()
 put' = singleton . Put
+
+initEnemy :: Vec -> Int -> Resource -> KindEnemy -> Enemy
+initEnemy p h res k =
+  pos .~ p $
+  hp .~ h $
+  img .~ (snd $ res^.charaImg) $
+  kindEnemy .~ k $
+  def
 
 data MotionCommon = Straight | Affine Vec | Curve Vec | Stay
 
@@ -73,12 +81,6 @@ zakoCommon 0 mot time bk c = do
       angle .~ ang $
       img .~ (bulletBitmap bk c (snd $ res^.bulletImg)) $
       def]
-
-doBulletCommon :: Int -> State Bullet ()
-doBulletCommon 0 = do
-  r <- use speed
-  t <- use angle
-  pos %= (+ fromPolar (r,t))
 
 debug :: Danmaku ()
 debug = do
