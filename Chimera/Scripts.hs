@@ -14,7 +14,6 @@ import Control.Monad.Operational.Mini
 import Control.Monad.State.Strict (get, put, execStateT, State, StateT)
 
 import Chimera.STG.Util
-import Chimera.STG.Types
 import Chimera.STG.World
 import Chimera.Load
 

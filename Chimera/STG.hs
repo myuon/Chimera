@@ -13,12 +13,10 @@ import qualified Data.Sequence as S
 import qualified Data.Foldable as F
 import Control.Monad.Trans.Class (lift)
 
-import Chimera.STG.Types as M
 import Chimera.STG.World as M
 import Chimera.STG.Util
 import Chimera.Load
 import Chimera.STG.UI as M
-import Chimera.Barrage
 
 import Chimera.Scripts
 import Chimera.Scripts.Stage1
@@ -109,7 +107,7 @@ instance GUIClass Field where
 
     -- run
     f <- get
-    enemy %= fmap (\e -> (^.local) $ runDanmaku (barrage (e^.kindEnemy)) `execState` LookAt e f)
+    enemy %= fmap (\e -> (^.local) $ runDanmaku (e^.runAuto) `execState` LookAt e f)
     
     -- move
     bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)

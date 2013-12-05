@@ -1,15 +1,5 @@
 {-# LANGUAGE TemplateHaskell, GADTs, TypeSynonymInstances, FlexibleInstances #-}
-module Chimera.STG.Types (
-  LookAt(..), local, global
-  , Autonomie(..), runAuto, bulletObject
-  , pos, spXY, speed, angle, counter, size
-  , object, chara, hp, img
-  , BulletObject, Bullet, kindBullet, KindBullet(..), param
-  , HasChara, HasObject
-  , Enemy
-  , stateEnemy, StateEnemy(..), kindEnemy, KindEnemy(..), shotQ
-  , Player, keys
-  ) where
+module Chimera.STG.Types where
 
 import Graphics.UI.FreeGame
 import Control.Lens
@@ -139,20 +129,20 @@ data StateEnemy = Dead | Alive | Attack deriving (Eq, Show)
 
 data KindEnemy = Zako Int Int | Boss Int Int | Debug deriving (Eq, Show)
 
-data Enemy = Enemy {
+data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
   _stateEnemy :: StateEnemy,
   _kindEnemy :: KindEnemy,
   _shotQ :: [[Bullet]]
   }
 
-makeLenses ''Enemy
+makeClassy ''EnemyObject
 
-instance HasChara Enemy where chara = charaEnemy
-instance HasObject Enemy where object = chara . object
+instance HasChara EnemyObject where chara = charaEnemy
+instance HasObject EnemyObject where object = chara . object
 
-instance Default Enemy where
-  def = Enemy {
+instance Default EnemyObject where
+  def = EnemyObject {
     _charaEnemy =
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
@@ -161,3 +151,4 @@ instance Default Enemy where
     _kindEnemy = undefined,
     _shotQ = [[]]
     }
+

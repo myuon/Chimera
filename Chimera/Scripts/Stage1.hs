@@ -10,7 +10,6 @@ import Control.Monad.Operational.Mini
 import Control.Monad.State.Strict (get, put, execStateT, State, StateT)
 
 import Chimera.STG.Util
-import Chimera.STG.Types
 import Chimera.STG.World
 import Chimera.Load
 import Chimera.Scripts
@@ -22,8 +21,8 @@ stage1 :: Stage ()
 stage1 = do
   res <- getResource
 
-  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res (Zako 1 10)
-  appearAt 30 $ initEnemy (V2 240 (-40)) 2 res (Boss 1 0)
+  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res (Zako 1 10) & runAuto .~ zako 20
+  appearAt 30 $ initEnemy (V2 240 (-40)) 2 res (Boss 1 0) & runAuto .~ boss 1
 
 zako :: Int -> Danmaku ()
 zako n

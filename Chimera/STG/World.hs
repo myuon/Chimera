@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
-  AtEnemy
+  Enemy
+  , AtEnemy
   , Field(..)
   , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug
   , loadField
@@ -10,6 +11,7 @@ module Chimera.STG.World (
   , Pattern(..)
   , Danmaku
   , Line(..), Stage, appear, wait, appearAt, keeper
+  , module Chimera.STG.Types
   ) where
 
 import Graphics.UI.FreeGame
@@ -28,6 +30,34 @@ import qualified Chimera.STG.UI as UI
 
 class HasGetResource c where
   getResource :: c Resource
+
+data Pattern p where
+  Shots :: [Bullet] -> Pattern ()
+  GetPlayer :: Pattern Player
+  Get :: Pattern Enemy
+  Put :: Enemy -> Pattern ()
+  GetResourcePattern :: Pattern Resource
+
+type Danmaku = Program Pattern
+
+getResourcePattern :: Danmaku Resource
+getResourcePattern = singleton GetResourcePattern
+
+instance HasGetResource Danmaku where
+  getResource = getResourcePattern
+
+type Enemy = Autonomie Danmaku EnemyObject
+
+instance HasObject Enemy where object = auto . object
+instance HasChara Enemy where chara = auto . chara
+instance HasEnemyObject Enemy where enemyObject = auto
+
+instance Default Enemy where
+  def = Autonomie {
+    _auto = def,
+    _runAuto = return ()
+  }
+
 
 data Line p where
   GetResourceLine :: Line Resource
@@ -75,22 +105,6 @@ loadField f =
   f
 
 type AtEnemy = LookAt Enemy Field
-
-
-data Pattern p where
-  Shots :: [Bullet] -> Pattern ()
-  GetPlayer :: Pattern Player
-  Get :: Pattern Enemy
-  Put :: Enemy -> Pattern ()
-  GetResourcePattern :: Pattern Resource
-
-type Danmaku = Program Pattern
-
-getResourcePattern :: Danmaku Resource
-getResourcePattern = singleton GetResourcePattern
-
-instance HasGetResource Danmaku where
-  getResource = getResourcePattern
 
 runDanmaku :: Danmaku () -> State AtEnemy ()
 runDanmaku = interpret step
