@@ -7,7 +7,7 @@ import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad
 import Control.Monad.Operational.Mini
-import Control.Monad.State.Strict (get, put, execStateT, State, StateT)
+import Control.Monad.State.Strict (get, put, execState, State)
 
 import Chimera.STG.Util
 import Chimera.STG.World
@@ -37,9 +37,11 @@ zako n
 boss :: Int -> Danmaku ()
 boss _ = do
   e <- get'
-  put' $ motionCommon 100 Stay e
+  put' $ motionCommon 100 Stay `execState` e
   res <- getResource
   p <- getPlayer
+  
+  let go = go' res
 
   let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ def
   when ((e^.counter) `mod` 15 == 0 && e^.stateEnemy == Attack) $ do
@@ -65,14 +67,16 @@ boss _ = do
       speed .~ 2.2 $
       angle +~ 2*pi*i/4 $
       img .~ (bulletBitmap Oval Blue (snd $ res^.bulletImg)) $
-      runAuto %~ (\f -> go 70 270 >> f) $
+      runAuto %~ (\f -> go 100 270 >> f) $
       def'
 
   where
-    go :: Double' -> Double' -> State BulletObject ()
-    go t1 t2 = do
+    go' :: Resource -> Double' -> Double' -> State BulletObject ()
+    go' res t1 t2 = do
       counter %= (+1)
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
         angle %= (+ pi/t1)
         speed %= (subtract (7.0/t2))
+      when (cnt == 170) $ do
+        img .= bulletBitmap BallTiny Purple (snd $ res^.bulletImg)

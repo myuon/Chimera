@@ -56,8 +56,7 @@ data KindBullet = KindBullet Int Int deriving (Eq, Show)
 
 data BulletObject = BulletObject {
   _objectBullet :: Object,
-  _kindBullet :: KindBullet,
-  _param :: Int
+  _kindBullet :: KindBullet
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
@@ -67,8 +66,7 @@ instance HasObject BulletObject where object = objectBullet
 instance Default BulletObject where
   def = BulletObject {
     _objectBullet = size .~ V2 3 3 $ def,
-    _kindBullet = KindBullet 0 0,
-    _param = 0
+    _kindBullet = KindBullet 0 0
     }
 
 type Bullet = Autonomie (State BulletObject) BulletObject
