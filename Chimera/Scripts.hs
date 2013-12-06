@@ -93,9 +93,8 @@ zakoCommon 0 mot time bk c = do
 debug :: Danmaku ()
 debug = do
   e <- get'
-  put' $ motionCommon 0 Stay `execState` e
+  put' $ motionCommon 100 Stay `execState` e
   res <- getResource
-  p <- getPlayer
   let cnt = e ^. counter
   let n = 20
 

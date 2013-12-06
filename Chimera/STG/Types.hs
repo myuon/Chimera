@@ -4,7 +4,8 @@ module Chimera.STG.Types where
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
-import Control.Monad.State.Strict
+import Control.Monad.State.Strict (State)
+import qualified Data.Sequence as S
 import Data.Default
 
 import Chimera.STG.Util
@@ -131,7 +132,7 @@ data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
   _stateEnemy :: StateEnemy,
   _kindEnemy :: KindEnemy,
-  _shotQ :: [[Bullet]]
+  _shotQ :: S.Seq Bullet
   }
 
 makeClassy ''EnemyObject
@@ -147,6 +148,6 @@ instance Default EnemyObject where
       def,
     _stateEnemy = Alive,
     _kindEnemy = undefined,
-    _shotQ = [[]]
+    _shotQ = S.empty
     }
 

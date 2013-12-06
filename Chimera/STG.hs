@@ -24,7 +24,7 @@ import Chimera.Scripts.Stage1
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
-  keeper $ initEnemy (V2 260 40) 2 res (Debug)
+  keeper $ initEnemy (V2 260 40) 2 res (Debug) & runAuto .~ debug
 
 loadStage :: Field -> Field
 loadStage f =
@@ -76,34 +76,49 @@ instance GUIClass Enemy where
   
   draw = do
     e <- get
-    translate (e ^. pos) $ fromBitmap (e ^. img)
+    translate (e^.pos) $ fromBitmap (e^.img)
 
 instance GUIClass Bullet where
   update = do
-    b <- get
-    bulletObject %= execState (b^.runAuto)
+    run <- use runAuto
+    bulletObject %= execState run
 
   draw = do
     b <- get
-    translate (b ^. pos) $ rotateR (b ^. angle + pi/2) $ fromBitmap (b ^. img)
+    translate (b^.pos) $ rotateR (b^.angle + pi/2) $ fromBitmap (b^.img)
+
+instance GUIClass Effect where
+  update = do
+    run <- use runAuto
+    effectObject %= execState run
+  
+  draw = do
+    b <- get
+    translate (b^.pos) $ fromBitmap (b^.img)
 
 instance GUIClass Field where
   update = do
+    res <- use resource
+  
     -- collision
     collideE
     collideP
+    
+    -- effect
+    es <- use enemy
+    effects %= (S.><) (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateEnemy == Dead) es)
     
     -- append
     f <- get
     let (s', LookAt me _) = runStage (f^.stage) `runState` (LookAt Nothing f)
     stage .= s'
     counterF %= (+1)
-    enemy %= maybe id (:) me
+    enemy %= maybe id (S.<|) me
     addBulletP
 
     es <- use enemy
-    bulletE %= (S.>< (S.fromList $ concat $ concat $ fmap (^.shotQ) es))
-    enemy %= fmap (\e -> shotQ .~ [[]] $ e)
+    bulletE %= (S.><) (F.foldl' (S.><) S.empty $ fmap (^.shotQ) es)
+    enemy %= fmap (shotQ .~ S.empty)
 
     -- run
     f <- get
@@ -112,21 +127,23 @@ instance GUIClass Field where
     -- move
     bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
     bulletE %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
-    enemy %= fmap (execState update) . filter (\e -> e^.stateEnemy /= Dead)
+    enemy %= fmap (execState update) . S.filter (\e -> e^.stateEnemy /= Dead)
     player %= execState update
+    effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)    
 
   draw = do
     f <- get
     mapM_' (\p -> lift $ draw `execStateT` p) (f^.bulletP)
     lift $ draw `execStateT` (f ^. player)
     mapM_' (\b -> lift $ draw `execStateT` b) (f^.bulletE)
-    mapM_ (\e -> lift $ draw `execStateT` e) (f^.enemy)
+    mapM_' (\e -> lift $ draw `execStateT` e) (f^.enemy)
+    mapM_' (\e -> lift $ draw `execStateT` e) (f^.effects)
 
     when (f^.isDebug) $ do
       mapM_' (\b -> colored blue . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletP)
       (\p -> colored yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
       mapM_' (\b -> colored red . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletE)
-      mapM_ (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
+      mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
     
@@ -140,14 +157,20 @@ instance GUIClass Field where
 addBulletP :: State Field ()
 addBulletP = do
   p <- use player
-  when (p ^. keys ^. zKey > 0 && p ^. counter `mod` 10 == 0) $ do
+  when (p^.keys^.zKey > 0 && p^.counter `mod` 10 == 0) $ do
     res <- use resource
-    bulletP %= (<|) (
-      pos .~ (p^.pos) $ 
+    bulletP %= (S.><) (S.fromList
+      [def' res & pos .~ (p^.pos) + V2 5 0,
+       def' res & pos .~ (p^.pos) - V2 5 0])
+  
+  where
+    def' :: Resource -> Bullet
+    def' res = 
       speed .~ 5 $ 
       angle .~ pi/2 $ 
-      img .~ (bulletBitmap Diamond Red (snd $ res^.bulletImg)) 
-      $ def)
+      img .~ (bulletBitmap Diamond Red (snd $ res^.bulletImg)) $
+      def
+
 
 collideE :: State Field ()
 collideE = do
@@ -159,12 +182,15 @@ collideE = do
   bulletP .= bs'
 
   where
-    run :: [Enemy] -> S.Seq Bullet -> ([Enemy], S.Seq Bullet)
-    run [] bs = ([], bs)
-    run (e:es) bs = let
-        (e', bs') = collide e bs
-        (es', bs'') = run es bs' in
-        (e':es', bs'')
+    run :: S.Seq Enemy -> S.Seq Bullet -> (S.Seq Enemy, S.Seq Bullet)
+    run es bs = run' (S.viewl es) bs
+  
+    run' :: S.ViewL Enemy -> S.Seq Bullet -> (S.Seq Enemy, S.Seq Bullet)
+    run' S.EmptyL bs = (S.empty, bs)
+    run' (e S.:< es) bs = let
+      (e', bs') = collide e bs
+      (es', bs'') = run es bs' in
+      (e' S.<| es', bs'')
 
 collideP :: State Field ()
 collideP = do

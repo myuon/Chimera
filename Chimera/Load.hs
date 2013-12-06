@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.Load (
   Resource(..)
-  , charaImg, bulletImg, board
+  , charaImg, bulletImg, effectImg, board
   , BKind(..), BColor(..)
   , bulletBitmap
   ) where
@@ -9,11 +9,13 @@ module Chimera.Load (
 import Graphics.UI.FreeGame
 import Control.Lens
 import Data.Default
+import qualified Data.Vector as V
 import System.IO.Unsafe (unsafePerformIO)
 
 data Resource = Resource {
   _charaImg :: (Bitmap, Bitmap),
   _bulletImg :: (Bitmap, Bitmap),
+  _effectImg :: V.Vector Bitmap,
   _board :: Bitmap
   }
 
@@ -26,10 +28,12 @@ instance Default Resource where
     r2 <- loadBitmapFromFile "data/img/dot_yousei.png"
     r3 <- loadBitmapFromFile "data/img/shot.png"
     b <- loadBitmapFromFile "data/img/board.png"
+    e1 <- loadBitmapFromFile "data/img/lightring.png"
     
     return Resource {
       _charaImg = (cropBitmap r1 (50,50) (0,0), cropBitmap r2 (32,32) (0,0)),
       _bulletImg = (r3, r3),
+      _effectImg = V.fromList [e1],
       _board = b
     }
 
