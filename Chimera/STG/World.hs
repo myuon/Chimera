@@ -1,7 +1,6 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
   Enemy
-  , Effect, effectObject, stateEffect, StateEffect(..), effEnemyDead
   , AtEnemy
   , Field(..)
   , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug, effects
@@ -39,6 +38,8 @@ data Pattern p where
   Get :: Pattern Enemy
   Put :: Enemy -> Pattern ()
   GetResourcePattern :: Pattern Resource
+  Effects :: [Effect] -> Pattern ()
+  CharaEffects :: [Effect] -> Pattern ()
 
 type Danmaku = Program Pattern
 
@@ -50,6 +51,7 @@ instance HasGetResource Danmaku where
 
 type Enemy = Autonomie Danmaku EnemyObject
 
+instance HasStateInt Enemy where stateInt = auto . stateInt
 instance HasObject Enemy where object = auto . object
 instance HasChara Enemy where chara = auto . chara
 instance HasEnemyObject Enemy where enemyObject = auto
@@ -72,59 +74,6 @@ type Stage = ReifiedProgram Line
 
 instance HasGetResource Stage where
   getResource = getResourceLine
-
-data StateEffect = Active | Inactive deriving (Eq, Show)
-
-data EffectObject = EffectObject {
-  _objectEffect :: Object,
-  _ress :: V.Vector Bitmap,
-  _stateEffect :: StateEffect,
-  _slowRate :: Int
-  }
-
-makeClassy ''EffectObject
-
-instance HasObject EffectObject where object = objectEffect
-
-instance Default EffectObject where
-  def = EffectObject {
-    _objectEffect = def,
-    _ress = V.empty,
-    _stateEffect = Active,
-    _slowRate = 5
-  }
-
-type Effect = Autonomie (State EffectObject) EffectObject
-
-instance HasObject Effect where object = auto . objectEffect
-instance HasEffectObject Effect where effectObject = auto
-
-instance Default Effect where
-  def = Autonomie {
-    _auto = def,
-    _runAuto = return ()
-  }
-
-effEnemyDead :: Resource -> Vec -> Effect
-effEnemyDead res p =
-  pos .~ p $
-  ress .~ (V.fromList $ cutIntoN 10 $ (res^.effectImg) V.! 0) $
-  runAuto .~ run $
-  (def :: Effect)
-
-  where
-    cutIntoN :: Int -> Bitmap -> [Bitmap]
-    cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
-      [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
-
-    run :: State EffectObject ()
-    run = do
-      f <- get
-      res <- use ress
-      let i = (f^.counter) `div` (f^.slowRate)
-      img .= res V.! i
-      counter %= (+1)
-      when (i == V.length res) $ stateEffect .= Inactive
 
 data Field = Field {
   _player :: Player,
@@ -171,6 +120,8 @@ runDanmaku = interpret step
     step (Put e) = local .= e
     step (Shots bs) = (local.shotQ) %= (S.><) (S.fromList bs)
     step GetPlayer = use global >>= \f -> return $ f ^. player
+    step (Effects es) = (local.effQ) %= (S.><) (S.fromList es)
+    step (CharaEffects es) = (local.charaEffects) %= (S.><) (S.fromList es)
 
 appearAt :: Int -> Enemy -> Stage ()
 appearAt n e = wait n >> appear e

@@ -72,10 +72,12 @@ instance GUIClass Enemy where
     pos %= (+sp)
     counter %= (+1)
     h <- use hp
-    when (h <= 0) $ stateEnemy .= Dead
+    when (h <= 0) $ stateInt .= fromEnum Dead
+    charaEffects %= fmap (\e -> update `execState` e)
   
   draw = do
     e <- get
+    mapM_' (\e -> lift $ draw `execStateT` e) (e^.charaEffects)
     translate (e^.pos) $ fromBitmap (e^.img)
 
 instance GUIClass Bullet where
@@ -94,7 +96,7 @@ instance GUIClass Effect where
   
   draw = do
     b <- get
-    translate (b^.pos) $ fromBitmap (b^.img)
+    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ fromBitmap (b^.img)
 
 instance GUIClass Field where
   update = do
@@ -106,7 +108,13 @@ instance GUIClass Field where
     
     -- effect
     es <- use enemy
-    effects %= (S.><) (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateEnemy == Dead) es)
+    effects %= (S.><) (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateInt == fromEnum Dead) es)
+    effects %= (S.><) (F.foldl' (S.><) S.empty $ fmap (^.effQ) es)
+    enemy %= fmap (effQ .~ S.empty)
+    p <- use player
+    when (p^.stateInt == fromEnum Damaged) $ do
+      effects %= (S.<|) (effPlayerDead res (p^.pos))
+      player %= (stateInt .~ fromEnum Alive)
     
     -- append
     f <- get
@@ -127,14 +135,14 @@ instance GUIClass Field where
     -- move
     bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
     bulletE %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
-    enemy %= fmap (execState update) . S.filter (\e -> e^.stateEnemy /= Dead)
+    enemy %= fmap (execState update) . S.filter (\e -> e^.stateInt /= fromEnum Dead)
     player %= execState update
-    effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)    
+    effects %= S.filter (\e -> e^.stateInt /= fromEnum Inactive) . fmap (execState update)    
 
   draw = do
     f <- get
     mapM_' (\p -> lift $ draw `execStateT` p) (f^.bulletP)
-    lift $ draw `execStateT` (f ^. player)
+    lift $ draw `execStateT` (f^.player)
     mapM_' (\b -> lift $ draw `execStateT` b) (f^.bulletE)
     mapM_' (\e -> lift $ draw `execStateT` e) (f^.enemy)
     mapM_' (\e -> lift $ draw `execStateT` e) (f^.effects)
@@ -146,13 +154,6 @@ instance GUIClass Field where
       mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
-    
-    where
-      sequence_' :: Monad m => S.Seq (m a) -> m () 
-      sequence_' ms = F.foldr (>>) (return ()) ms
-      
-      mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
-      mapM_' f as = sequence_' (fmap f as)
 
 addBulletP :: State Field ()
 addBulletP = do
@@ -170,7 +171,6 @@ addBulletP = do
       angle .~ pi/2 $ 
       img .~ (bulletBitmap Diamond Red (snd $ res^.bulletImg)) $
       def
-
 
 collideE :: State Field ()
 collideE = do
@@ -198,7 +198,7 @@ collideP = do
   bs <- use bulletE
   
   let (p', bs') = collide p bs
-  player .= p'
+  player .= (bool id (stateInt .~ fromEnum Damaged) (p^.hp /= p'^.hp) $ p')
   bulletE .= bs'
   
 collide :: (HasChara c, HasObject c) => c -> S.Seq Bullet -> (c, S.Seq Bullet)
@@ -214,3 +214,4 @@ collide c bs = (,)
     detect (pos1, size1) (pos2, size2) =
       let V2 dx dy = fmap abs $ pos1 - pos2; V2 sx sy = size1 + size2 in
       dx < sx/2 && dy < sy/2
+

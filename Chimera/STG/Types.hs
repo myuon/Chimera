@@ -6,6 +6,7 @@ import Control.Lens
 import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
 import Control.Monad.State.Strict (State)
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 import Data.Default
 
 import Chimera.STG.Util
@@ -53,6 +54,44 @@ instance Default Object where
     _size = V2 0 0
     }
 
+class HasStateInt c where stateInt :: Lens' c Int
+
+data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
+
+data EffectObject = EffectObject {
+  _objectEffect :: Object,
+  _ress :: V.Vector Bitmap,
+  _stateEffect :: StateEffect,
+  _slowRate :: Int
+  }
+
+makeClassy ''EffectObject
+
+instance HasObject EffectObject where object = objectEffect
+instance HasStateInt EffectObject where
+  stateInt = lens (fromEnum . _stateEffect) (\f a -> f & stateEffect .~ toEnum a)
+
+instance Default EffectObject where
+  def = EffectObject {
+    _objectEffect = def,
+    _ress = V.empty,
+    _stateEffect = Active,
+    _slowRate = 3
+  }
+
+type Effect = Autonomie (State EffectObject) EffectObject
+
+instance HasObject Effect where object = auto . objectEffect
+instance HasEffectObject Effect where effectObject = auto
+instance HasStateInt Effect where stateInt = auto . stateInt
+
+instance Default Effect where
+  def = Autonomie {
+    _auto = def,
+    _runAuto = return ()
+  }
+
+
 data KindBullet = KindBullet Int Int deriving (Eq, Show)
 
 data BulletObject = BulletObject {
@@ -84,12 +123,19 @@ instance Default Bullet where
       pos %= (+ fromPolar (r,t))
     }
 
+data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
+
 data Chara = Chara {
   _objectChara :: Object,
-  _hp :: Int
-  } deriving (Show)
+  _stateChara :: StateChara,
+  _hp :: Int,
+  _charaEffects :: S.Seq Effect
+  }
 
 makeClassy ''Chara
+
+instance HasStateInt Chara where
+  stateInt = lens (fromEnum . _stateChara) (\f a -> f & stateChara .~ toEnum a)
 
 instance HasObject Chara where
   object = objectChara
@@ -97,7 +143,9 @@ instance HasObject Chara where
 instance Default Chara where
   def = Chara {
     _objectChara = def,
-    _hp = 0
+    _stateChara = Alive,
+    _hp = 0,
+    _charaEffects = S.empty
     }
 
 data Player = Player {
@@ -107,11 +155,9 @@ data Player = Player {
 
 makeLenses ''Player
 
-instance HasChara Player where
-  chara = charaPlayer
-
-instance HasObject Player where
-  object = chara . object
+instance HasStateInt Player where stateInt = chara . stateInt
+instance HasChara Player where chara = charaPlayer
+instance HasObject Player where object = chara . object
 
 instance Default Player where
   def = Player {
@@ -124,19 +170,18 @@ instance Default Player where
     _keys = def
     }
 
-data StateEnemy = Dead | Alive | Attack deriving (Eq, Show)
-
 data KindEnemy = Zako Int Int | Boss Int Int | Debug deriving (Eq, Show)
 
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
-  _stateEnemy :: StateEnemy,
   _kindEnemy :: KindEnemy,
-  _shotQ :: S.Seq Bullet
+  _shotQ :: S.Seq Bullet,
+  _effQ :: S.Seq Effect
   }
 
 makeClassy ''EnemyObject
 
+instance HasStateInt EnemyObject where stateInt = chara . stateInt
 instance HasChara EnemyObject where chara = charaEnemy
 instance HasObject EnemyObject where object = chara . object
 
@@ -146,8 +191,8 @@ instance Default EnemyObject where
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
       def,
-    _stateEnemy = Alive,
     _kindEnemy = undefined,
-    _shotQ = S.empty
+    _shotQ = S.empty,
+    _effQ = S.empty
     }
 
