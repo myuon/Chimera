@@ -8,6 +8,7 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.Operational.Mini
 import Control.Monad.State.Strict (get, put, execState, State)
+import qualified Data.Vector as V
 
 import Chimera.STG.Util
 import Chimera.STG.World
@@ -40,11 +41,15 @@ boss _ = do
   put' $ motionCommon 100 Stay `execState` e
   res <- getResource
   p <- getPlayer
+  when (e^.counter == 130) $ effs $ return $ effStart res (e^.pos)
+  when (e^.counter == 200) $
+    charaEffs $ [effAttack 0 res (e^.pos),
+                 effAttack 1 res (e^.pos),
+                 effAttack 2 res (e^.pos)]
   
   let go = go' res
-
   let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ def
-  when ((e^.counter) `mod` 15 == 0 && e^.stateEnemy == Attack) $ do
+  when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateInt == fromEnum Attack) $ do
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
@@ -71,6 +76,48 @@ boss _ = do
       def'
 
   where
+    effStart :: Resource -> Vec -> Effect
+    effStart res p =
+      pos .~ p $
+      ress .~ (res^.effectImg) V.! 2 $
+      size .~ V2 0.8 0.8 $
+      slowRate .~ 6 $
+      runAuto .~ run $
+      (def :: Effect)
+
+      where
+        run :: State EffectObject ()
+        run = do
+          f <- get
+          res <- use ress
+          let i = (f^.counter) `div` (f^.slowRate)
+          img .= res V.! i
+          size *= 1.01
+          counter %= (+1)
+          when (i == V.length res) $ stateInt .= fromEnum Inactive
+    
+    effAttack :: Int -> Resource -> Vec -> Effect
+    effAttack i res p =
+      pos .~ p $
+      img .~ (res^.effectImg) V.! 3 V.! i $
+      runAuto .~ run $
+      (def :: Effect)
+
+      where
+        run :: State EffectObject ()
+        run = do
+          f <- get
+          when (f^.counter <= 50) $ size += 1/50
+          res <- use ress
+          angle += anglePlus i
+          counter %= (+1)
+        
+        anglePlus :: Int -> Double'
+        anglePlus 0 = 1/300
+        anglePlus 1 = -2/300
+        anglePlus 2 = 3/300
+        
+
     go' :: Resource -> Double' -> Double' -> State BulletObject ()
     go' res t1 t2 = do
       counter %= (+1)

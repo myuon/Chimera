@@ -6,10 +6,14 @@ module Chimera.STG.Util (
   , fromPolar
   , isInside
   , boxVertex
+  , cutIntoN
+  , sequence_', mapM_'
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import qualified Data.Sequence as S
+import qualified Data.Foldable as F
 
 type Double' = Float
 
@@ -41,3 +45,13 @@ boxVertex pos size = [pos - size,
                       pos + V2 (size^._x) (-size^._y),
                       pos + size,
                       pos + V2 (-size^._x) (size^._y)]
+
+cutIntoN :: Int -> Bitmap -> [Bitmap]
+cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
+  [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
+
+sequence_' :: Monad m => S.Seq (m a) -> m () 
+sequence_' ms = F.foldr (>>) (return ()) ms
+
+mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
+mapM_' f as = sequence_' (fmap f as)

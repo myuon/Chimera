@@ -3,7 +3,7 @@ module Chimera.STG.World (
   Enemy
   , AtEnemy
   , Field(..)
-  , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug
+  , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug, effects
   , loadField
   , runDanmaku, runStage
 
@@ -21,6 +21,7 @@ import Control.Monad.State.Strict (get, put, modify, execStateT, State, StateT)
 import Control.Monad.Operational.Mini
 import Control.Monad.Operational.TH (makeSingletons)
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 import Data.Default
 
 import Chimera.STG.Types
@@ -37,6 +38,8 @@ data Pattern p where
   Get :: Pattern Enemy
   Put :: Enemy -> Pattern ()
   GetResourcePattern :: Pattern Resource
+  Effects :: [Effect] -> Pattern ()
+  CharaEffects :: [Effect] -> Pattern ()
 
 type Danmaku = Program Pattern
 
@@ -48,6 +51,7 @@ instance HasGetResource Danmaku where
 
 type Enemy = Autonomie Danmaku EnemyObject
 
+instance HasStateInt Enemy where stateInt = auto . stateInt
 instance HasObject Enemy where object = auto . object
 instance HasChara Enemy where chara = auto . chara
 instance HasEnemyObject Enemy where enemyObject = auto
@@ -57,7 +61,6 @@ instance Default Enemy where
     _auto = def,
     _runAuto = return ()
   }
-
 
 data Line p where
   GetResourceLine :: Line Resource
@@ -74,9 +77,10 @@ instance HasGetResource Stage where
 
 data Field = Field {
   _player :: Player,
-  _enemy :: [Enemy],
+  _enemy :: S.Seq Enemy,
   _bulletP :: S.Seq Bullet,
   _bulletE :: S.Seq Bullet,
+  _effects :: S.Seq Effect,
 
   _stage :: Stage (),
   _resource :: Resource,
@@ -89,9 +93,10 @@ makeLenses ''Field
 instance Default Field where
   def = Field {
     _player = undefined,
-    _enemy = [],
+    _enemy = S.empty,
     _bulletP = S.empty,
     _bulletE = S.empty,
+    _effects = S.empty,
 
     _stage = return (),
     _resource = undefined,
@@ -113,8 +118,10 @@ runDanmaku = interpret step
     step GetResourcePattern = use global >>= \f -> return $ f ^. resource
     step Get = use local
     step (Put e) = local .= e
-    step (Shots bs) = (local.shotQ) %= (bs:)
+    step (Shots bs) = (local.shotQ) %= (S.><) (S.fromList bs)
     step GetPlayer = use global >>= \f -> return $ f ^. player
+    step (Effects es) = (local.effQ) %= (S.><) (S.fromList es)
+    step (CharaEffects es) = (local.charaEffects) %= (S.><) (S.fromList es)
 
 appearAt :: Int -> Enemy -> Stage ()
 appearAt n e = wait n >> appear e
@@ -128,7 +135,7 @@ runStage (Appear e :>>= next) = local .= (Just e) >> return (next ())
 runStage line@(Wait n :>>= next) = case n == 0 of
     True -> return (next ())
     False -> return (Wait (n-1) :>>= next)
-runStage line@(Stop :>>= next) = use (global.enemy) >>= (\es -> case length es == 0 of
+runStage line@(Stop :>>= next) = use (global.enemy) >>= (\es -> case S.length es == 0 of
     True -> return (next ())
     False -> return line)
 runStage line@(Return _) = return line
