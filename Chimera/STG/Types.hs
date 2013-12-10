@@ -170,11 +170,8 @@ instance Default Player where
     _keys = def
     }
 
-data KindEnemy = Zako Int Int | Boss Int Int | Debug deriving (Eq, Show)
-
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
-  _kindEnemy :: KindEnemy,
   _shotQ :: S.Seq Bullet,
   _effQ :: S.Seq Effect
   }
@@ -191,7 +188,6 @@ instance Default EnemyObject where
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
       def,
-    _kindEnemy = undefined,
     _shotQ = S.empty,
     _effQ = S.empty
     }

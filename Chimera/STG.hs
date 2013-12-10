@@ -21,10 +21,12 @@ import Chimera.STG.UI as M
 import Chimera.Scripts
 import Chimera.Scripts.Stage1
 
+import Debug.Trace
+
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
-  keeper $ initEnemy (V2 260 40) 2 res (Debug) & runAuto .~ debug
+  keeper $ initEnemy (V2 260 40) 2 res & runAuto .~ debug
 
 loadStage :: Field -> Field
 loadStage f =
@@ -148,9 +150,9 @@ instance GUIClass Field where
     mapM_' (\e -> lift $ draw `execStateT` e) (f^.effects)
 
     when (f^.isDebug) $ do
-      mapM_' (\b -> colored blue . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletP)
+      mapM_' (\b -> colored blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bulletP)
       (\p -> colored yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
-      mapM_' (\b -> colored red . polygon $ boxVertex (b^.pos) (b^.size)) (f ^. bulletE)
+      mapM_' (\b -> colored red . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bulletE)
       mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
@@ -208,10 +210,23 @@ collide c bs = (,)
   
   where
     bs' :: S.Seq Bullet
-    bs' = S.filter (\b -> detect (b^.pos, b^.size) (c^.pos, c^.size)) bs
+    bs' = S.filter (detect c) bs
 
-    detect :: (Vec, Vec) -> (Vec, Vec) -> Bool
-    detect (pos1, size1) (pos2, size2) =
-      let V2 dx dy = fmap abs $ pos1 - pos2; V2 sx sy = size1 + size2 in
-      dx < sx/2 && dy < sy/2
+    detect :: (HasObject c, HasObject c') => c -> c' -> Bool
+    detect a b = 
+      let V2 w' h' = a^.size
+          r = rot2D (a^.angle) in
+      or $ [(a^.pos + r !* (V2   w'    h' )) `isIn` b,
+            (a^.pos + r !* (V2 (-w')   h' )) `isIn` b,
+            (a^.pos + r !* (V2   w'  (-h'))) `isIn` b,
+            (a^.pos + r !* (V2 (-w') (-h'))) `isIn` b]
+    
+    isIn :: (HasObject c) => Vec -> c -> Bool
+    isIn p box = isInCentoredBox (p-box^.pos) where
+      isInCentoredBox :: Vec -> Bool
+      isInCentoredBox p' = 
+        let V2 px' py' = rot2D (-box^.angle) !* p' in
+--        Debug.Trace.trace (show $ (V2 px' py', box^.size)) $ 
+        abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
+
 

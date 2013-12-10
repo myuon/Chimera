@@ -5,9 +5,10 @@ module Chimera.STG.Util (
   , areaTop, areaLeft, areaBottom, areaRight
   , fromPolar
   , isInside
-  , boxVertex
+  , boxVertex, boxVertexRotated
   , cutIntoN
   , sequence_', mapM_'
+  , rot2D
   ) where
 
 import Graphics.UI.FreeGame
@@ -46,6 +47,10 @@ boxVertex pos size = [pos - size,
                       pos + size,
                       pos + V2 (-size^._x) (size^._y)]
 
+boxVertexRotated :: Vec -> Vec -> Double' -> [Vec]
+boxVertexRotated pos size angle = let r = rot2D angle in
+  map (pos +) $ map (r !*) $ boxVertex 0 size
+
 cutIntoN :: Int -> Bitmap -> [Bitmap]
 cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
   [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
@@ -55,3 +60,8 @@ sequence_' ms = F.foldr (>>) (return ()) ms
 
 mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
 mapM_' f as = sequence_' (fmap f as)
+
+rot2D :: Double' -> M22 Double'
+rot2D r = V2
+          (V2 (cos(-r)) (-sin(-r)))
+          (V2 (sin(-r)) (cos(-r)))

@@ -37,12 +37,11 @@ effs = singleton . Effects
 charaEffs :: [Effect] -> Danmaku ()
 charaEffs = singleton . CharaEffects
 
-initEnemy :: Vec -> Int -> Resource -> KindEnemy -> Enemy
-initEnemy p h res k =
+initEnemy :: Vec -> Int -> Resource -> Enemy
+initEnemy p h res =
   pos .~ p $
   hp .~ h $
   img .~ (snd $ res^.charaImg) $
-  kindEnemy .~ k $
   def
 
 data MotionCommon = Straight | Affine Vec | Curve Vec | Stay

@@ -71,7 +71,7 @@ game :: IO (Maybe a)
 game = runGame start $ do
   font' <- embedIO $ loadFont "data/font/VL-PGothic-Regular.ttf"
   time' <- embedIO getCurrentTime
-  let field' = STG.loadStage (STG.isDebug .~ False $ def)
+  let field' = STG.loadStage (STG.isDebug .~ True $ def)
   
   step
   translate (V2 30 30) . colored white . text (font') 20 $ "読み込み中…"
