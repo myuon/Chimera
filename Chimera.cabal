@@ -24,3 +24,5 @@ executable Chimera
                    , mtl ==2.1.*
                    , time ==1.4.*
                    , minioperational ==0.4.*
+                   , semigroups ==0.1*
+                   , comonad ==4.*

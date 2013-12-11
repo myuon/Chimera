@@ -1,3 +1,6 @@
+{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances, FunctionalDependencies, ConstraintKinds #-}
+{-# LANGUAGE RankNTypes #-}
 module Chimera.STG.Util (
   Double'
   , V2, Vec, Pos
@@ -9,12 +12,17 @@ module Chimera.STG.Util (
   , cutIntoN
   , sequence_', mapM_'
   , rot2D
+  , apply1
+  , Autonomie(..), autonomie, auto, runAuto, Autonomic
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Control.Comonad
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
+import qualified Data.List.NonEmpty as N
+import Data.Char (toLower)
 
 type Double' = Float
 
@@ -65,3 +73,41 @@ rot2D :: Double' -> M22 Double'
 rot2D r = V2
           (V2 (cos(-r)) (-sin(-r)))
           (V2 (sin(-r)) (cos(-r)))
+
+-- redefine
+-- from http://hackage.haskell.org/package/comonad-4.0/docs/src/Control-Comonad.html
+instance Comonad N.NonEmpty where
+  extend f w@ ~(_ N.:| aas) = f w N.:| case aas of
+      []     -> []
+      (a:as) -> N.toList (extend f (a N.:| as))
+  extract ~(a N.:| _) = a
+  {-# INLINE extract #-}
+
+apply1 :: (a -> a) -> N.NonEmpty a -> N.NonEmpty a
+apply1 f (a N.:| as) = f a N.:| as
+
+data Autonomie m a = Autonomie {
+  _auto :: a,
+  _runAuto :: m ()
+  }
+
+makeLensesFor [("_auto", "__auto"),
+               ("_runAuto", "__runAuto")] ''Autonomie
+
+class Autonomic c m a | c -> a, c -> m where
+  autonomie :: Lens' c (Autonomie m a)
+
+instance Autonomic (Autonomie m a) m a where
+  autonomie = id
+
+auto :: forall c m a. (Autonomic c m a) => Lens' c a
+auto = autonomie . __auto
+
+runAuto :: forall c m a. (Autonomic c m a) => Lens' c (m ())
+runAuto = autonomie . __runAuto
+
+instance (Eq a) => Eq (Autonomie m a) where
+  a == b = a^.auto == b^.auto
+
+instance (Show a) => Show (Autonomie m a) where
+  show a = show $ a^.auto

@@ -132,11 +132,14 @@ keeper e = appear e >> stop
 runStage :: Stage () -> State (LookAt (Maybe Enemy) Field) (Stage ())
 runStage (GetResourceLine :>>= next) = next `fmap` use (global.resource)
 runStage (Appear e :>>= next) = local .= (Just e) >> return (next ())
-runStage line@(Wait n :>>= next) = case n == 0 of
+runStage line@(Wait n :>>= next) = do
+  case n == 0 of
     True -> return (next ())
     False -> return (Wait (n-1) :>>= next)
-runStage line@(Stop :>>= next) = use (global.enemy) >>= (\es -> case S.length es == 0 of
+runStage line@(Stop :>>= next) = do
+  es <- use (global.enemy)
+  case S.length es == 0 of
     True -> return (next ())
-    False -> return line)
+    False -> return line
 runStage line@(Return _) = return line
 

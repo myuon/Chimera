@@ -9,9 +9,11 @@ import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Arrow ((***))
 import Control.Monad.State.Strict
+import Control.Comonad
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
 import Control.Monad.Trans.Class (lift)
+import qualified Data.List.NonEmpty as N
 
 import Chimera.STG.World as M
 import Chimera.STG.Util
@@ -85,7 +87,7 @@ instance GUIClass Enemy where
 instance GUIClass Bullet where
   update = do
     run <- use runAuto
-    bulletObject %= execState run
+    auto %= execState run
 
   draw = do
     b <- get
@@ -129,7 +131,10 @@ instance GUIClass Field where
     es <- use enemy
     bulletE %= (S.><) (F.foldl' (S.><) S.empty $ fmap (^.shotQ) es)
     enemy %= fmap (shotQ .~ S.empty)
-
+    
+    bulletE %= \bs -> bs S.>< (F.foldl' (S.><) S.empty $ fmap (\b -> fmap (\a -> b & auto .~ Bullet' a S.empty) $ b^.auto.shotObjQ) $ bs)
+    bulletE %= fmap (auto . shotObjQ .~ S.empty)
+    
     -- run
     f <- get
     enemy %= fmap (\e -> (^.local) $ runDanmaku (e^.runAuto) `execState` LookAt e f)
@@ -226,7 +231,6 @@ collide c bs = (,)
       isInCentoredBox :: Vec -> Bool
       isInCentoredBox p' = 
         let V2 px' py' = rot2D (-box^.angle) !* p' in
---        Debug.Trace.trace (show $ (V2 px' py', box^.size)) $ 
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 
 
