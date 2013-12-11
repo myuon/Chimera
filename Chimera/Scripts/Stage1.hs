@@ -1,5 +1,5 @@
 module Chimera.Scripts.Stage1 (
-  load1, stage1, zako, boss
+  load1, stage1
   )
   where
 
@@ -8,7 +8,10 @@ import Control.Lens
 import Control.Monad
 import Control.Monad.Operational.Mini
 import Control.Monad.State.Strict (get, put, execState, State)
+import Control.Monad.Trans.Class (lift)
 import qualified Data.Vector as V
+import qualified Data.Sequence as S
+import qualified Data.List.NonEmpty as N
 
 import Chimera.STG.Util
 import Chimera.STG.World
@@ -22,8 +25,9 @@ stage1 :: Stage ()
 stage1 = do
   res <- getResource
 
-  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res (Zako 1 10) & runAuto .~ zako 20
-  appearAt 30 $ initEnemy (V2 240 (-40)) 2 res (Boss 1 0) & runAuto .~ boss 1
+  keeper $ initEnemy (V2 240 (-40)) 2 res & runAuto .~ boss2
+  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res & runAuto .~ zako 20
+  keeper $ initEnemy (V2 240 (-40)) 2 res & runAuto .~ boss1
 
 zako :: Int -> Danmaku ()
 zako n
@@ -35,8 +39,8 @@ zako n
     acc 0 = V2 (-0.05) 0.005
     acc 1 = V2 0.05 0.005
 
-boss :: Int -> Danmaku ()
-boss _ = do
+boss1 :: Danmaku ()
+boss1 = do
   e <- get'
   put' $ motionCommon 100 Stay `execState` e
   res <- getResource
@@ -117,8 +121,7 @@ boss _ = do
         anglePlus 1 = -2/300
         anglePlus 2 = 3/300
         
-
-    go' :: Resource -> Double' -> Double' -> State BulletObject ()
+    go' :: Resource -> Double' -> Double' -> State Bullet' ()
     go' res t1 t2 = do
       counter %= (+1)
       cnt <- use counter
@@ -127,3 +130,45 @@ boss _ = do
         speed %= (subtract (7.0/t2))
       when (cnt == 170) $ do
         img .= bulletBitmap BallTiny Purple (snd $ res^.bulletImg)
+  
+  
+boss2 :: Danmaku ()
+boss2 = do
+  e <- get'
+  put' $ motionCommon 100 Stay `execState` e
+  res <- getResource
+  p <- getPlayer
+  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  let go = go' res
+  
+  when ((e^.counter) `mod` 50 == 0 && e^.stateInt == fromEnum Attack) $ do
+    shots $ (flip map) [0..5] $ \i ->
+      pos .~ e^.pos $
+      speed .~ 2 $
+      angle .~ ang + fromIntegral i*2*pi/5 $
+      img .~ (bulletBitmap BallMedium (toEnum $ i*2 `mod` 8) (snd $ res^.bulletImg)) $
+      runAuto %~ (\f -> go i >> f) $
+      def
+  when (e^.counter `mod` 100 == 0 && e^.stateInt == fromEnum Attack) $ do
+    shots $ return $
+      pos .~ e^.pos $
+      speed .~ 1.5 $
+      angle .~ ang $
+      img .~ (bulletBitmap BallLarge Purple (snd $ res^.bulletImg)) $
+      def
+  
+  where
+    go' :: Resource -> Int -> State Bullet' ()
+    go' res n = do
+      counter %= (+1)
+      cnt <- use counter
+      let span = 50
+      when (cnt < 200 && cnt `mod` span == 0) $ do
+        speed += 1.5
+        b <- use bulletObject
+        let t = pi/(3)
+        shotObjQ .= S.singleton (b & angle +~ t)
+        angle -= t
+      when (cnt < 200) $ do
+        speed -= (fromIntegral $ span - cnt `mod` span)/1000
+        

@@ -1,12 +1,15 @@
 {-# LANGUAGE TemplateHaskell, GADTs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances #-}
 module Chimera.STG.Types where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton)
 import Control.Monad.State.Strict (State)
+import Control.Comonad
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
+import qualified Data.List.NonEmpty as N
 import Data.Default
 
 import Chimera.STG.Util
@@ -19,16 +22,6 @@ data LookAt p q = LookAt {
   }
 
 makeLenses ''LookAt
-
-data Autonomie m a = Autonomie {
-  _auto :: a,
-  _runAuto :: m ()
-  }
-
-makeLenses ''Autonomie
-
-instance (Eq a) => Eq (Autonomie m a) where
-  a == b = a^.auto == b^.auto
 
 data Object = Object {
   _pos :: Vec,
@@ -81,8 +74,8 @@ instance Default EffectObject where
 
 type Effect = Autonomie (State EffectObject) EffectObject
 
-instance HasObject Effect where object = auto . objectEffect
 instance HasEffectObject Effect where effectObject = auto
+instance HasObject Effect where object = auto . objectEffect
 instance HasStateInt Effect where stateInt = auto . stateInt
 
 instance Default Effect where
@@ -91,12 +84,8 @@ instance Default Effect where
     _runAuto = return ()
   }
 
-
-data KindBullet = KindBullet Int Int deriving (Eq, Show)
-
 data BulletObject = BulletObject {
-  _objectBullet :: Object,
-  _kindBullet :: KindBullet
+  _objectBullet :: Object
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
@@ -105,18 +94,26 @@ instance HasObject BulletObject where object = objectBullet
 
 instance Default BulletObject where
   def = BulletObject {
-    _objectBullet = size .~ V2 3 3 $ def,
-    _kindBullet = KindBullet 0 0
+    _objectBullet = size .~ V2 3 3 $ def
     }
 
-type Bullet = Autonomie (State BulletObject) BulletObject
+data Bullet' = Bullet' {
+  _objectBullet' :: BulletObject,
+  _shotObjQ :: S.Seq BulletObject
+  } deriving (Eq)
 
-instance HasObject Bullet where object = auto . object
-instance HasBulletObject Bullet where bulletObject = auto
+makeLenses ''Bullet'
+
+type Bullet = Autonomie (State Bullet') Bullet'
+
+instance HasBulletObject Bullet' where bulletObject = objectBullet'
+instance HasObject Bullet' where object = bulletObject . object
+instance HasBulletObject Bullet where bulletObject = auto . objectBullet'
+instance HasObject Bullet where object = auto . bulletObject . object
 
 instance Default Bullet where
   def = Autonomie {
-    _auto = def,
+    _auto = Bullet' def S.empty,
     _runAuto = do
       r <- use speed
       t <- use angle
@@ -137,8 +134,7 @@ makeClassy ''Chara
 instance HasStateInt Chara where
   stateInt = lens (fromEnum . _stateChara) (\f a -> f & stateChara .~ toEnum a)
 
-instance HasObject Chara where
-  object = objectChara
+instance HasObject Chara where object = objectChara
 
 instance Default Chara where
   def = Chara {
@@ -170,11 +166,8 @@ instance Default Player where
     _keys = def
     }
 
-data KindEnemy = Zako Int Int | Boss Int Int | Debug deriving (Eq, Show)
-
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
-  _kindEnemy :: KindEnemy,
   _shotQ :: S.Seq Bullet,
   _effQ :: S.Seq Effect
   }
@@ -191,7 +184,6 @@ instance Default EnemyObject where
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
       def,
-    _kindEnemy = undefined,
     _shotQ = S.empty,
     _effQ = S.empty
     }
