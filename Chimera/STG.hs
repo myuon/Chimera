@@ -23,8 +23,6 @@ import Chimera.STG.UI as M
 import Chimera.Scripts
 import Chimera.Scripts.Stage1
 
-import Debug.Trace
-
 stage2 :: Stage ()
 stage2 = do
   res <- getResource
@@ -77,17 +75,18 @@ instance GUIClass Enemy where
     counter %= (+1)
     h <- use hp
     when (h <= 0) $ stateInt .= fromEnum Dead
-    charaEffects %= fmap (\e -> update `execState` e)
+    effectEnemy %= S.filter (\e -> e^.stateInt /= fromEnum Inactive) . fmap (\e -> update `execState` e)
   
   draw = do
     e <- get
-    mapM_' (\e -> lift $ draw `execStateT` e) (e^.charaEffects)
+    mapM_' (\e -> lift $ draw `execStateT` e) (e^.effectEnemy)
     translate (e^.pos) $ fromBitmap (e^.img)
 
 instance GUIClass Bullet where
   update = do
-    run <- use runAuto
-    auto %= execState run
+    r <- use speed
+    t <- use angle
+    pos %= (+ fromPolar (r,t))
 
   draw = do
     b <- get
@@ -112,9 +111,7 @@ instance GUIClass Field where
     
     -- effect
     es <- use enemy
-    effects %= (S.><) (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateInt == fromEnum Dead) es)
-    effects %= (S.><) (F.foldl' (S.><) S.empty $ fmap (^.effQ) es)
-    enemy %= fmap (effQ .~ S.empty)
+    effects ><= (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateInt == fromEnum Dead) es)
     p <- use player
     when (p^.stateInt == fromEnum Damaged) $ do
       effects %= (S.<|) (effPlayerDead res (p^.pos))
@@ -127,25 +124,33 @@ instance GUIClass Field where
     counterF %= (+1)
     enemy %= maybe id (S.<|) me
     addBulletP
-
-    es <- use enemy
-    bulletE %= (S.><) (F.foldl' (S.><) S.empty $ fmap (^.shotQ) es)
-    enemy %= fmap (shotQ .~ S.empty)
     
-    bulletE %= \bs -> bs S.>< (F.foldl' (S.><) S.empty $ fmap (\b -> fmap (\a -> b & auto .~ Bullet' a S.empty) $ b^.auto.shotObjQ) $ bs)
-    bulletE %= fmap (auto . shotObjQ .~ S.empty)
+    enemy ><= (f^.enemyQ)
+    enemyQ .= S.empty
+    
+    bulletE ><= (f^.bulletEQ)
+    bulletEQ .= S.empty
+    
+    effects ><= (f^.effectsQ)
+    effectsQ .= S.empty
     
     -- run
-    f <- get
-    enemy %= fmap (\e -> (^.local) $ runDanmaku (e^.runAuto) `execState` LookAt e f)
+    modify (execState $ runAutonomie enemy)
+    modify (execState $ runAutonomie bulletE)
     
-    -- move
+    -- update
     bulletP %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
     bulletE %= S.filter (\b -> isInside $ b^.pos) . fmap (execState update)
     enemy %= fmap (execState update) . S.filter (\e -> e^.stateInt /= fromEnum Dead)
     player %= execState update
-    effects %= S.filter (\e -> e^.stateInt /= fromEnum Inactive) . fmap (execState update)    
-
+    effects %= S.filter (\e -> e^.stateInt /= fromEnum Inactive) . fmap (execState update)
+    where
+      runE :: S.Seq Enemy -> Field -> (S.Seq Enemy, Field)
+      runE = newAutonomie
+      
+      runB :: S.Seq Bullet -> Field -> (S.Seq Bullet, Field)
+      runB = newAutonomie
+      
   draw = do
     f <- get
     mapM_' (\p -> lift $ draw `execStateT` p) (f^.bulletP)
@@ -162,12 +167,28 @@ instance GUIClass Field where
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
 
+runAutonomie :: (Autonomic a (Danmaku b) b) => Lens' Field (S.Seq a) -> State Field ()
+runAutonomie member = do
+  f <- get
+  let (s', f') = newAutonomie (f^.member) f
+  put f'
+  member .= s'
+
+newAutonomie :: (Autonomic a (Danmaku b) b) => S.Seq a -> Field -> (S.Seq a, Field)
+newAutonomie es f = go (S.viewl es) f where
+  go :: (Autonomic a (Danmaku b) b) => S.ViewL a -> Field -> (S.Seq a, Field)
+  go S.EmptyL f = (S.empty, f)
+  go (e S.:< es) f = let
+    LookAt eo' f' = (runDanmaku $ e^.runAuto) `execState` LookAt (e^.auto) f
+    (es', f'') = newAutonomie es f' in
+    ((e & auto .~ eo') S.<| es', f'')
+
 addBulletP :: State Field ()
 addBulletP = do
   p <- use player
   when (p^.keys^.zKey > 0 && p^.counter `mod` 10 == 0) $ do
     res <- use resource
-    bulletP %= (S.><) (S.fromList
+    bulletP ><= (S.fromList
       [def' res & pos .~ (p^.pos) + V2 5 0,
        def' res & pos .~ (p^.pos) - V2 5 0])
   

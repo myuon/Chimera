@@ -10,18 +10,17 @@ module Chimera.STG.Util (
   , isInside
   , boxVertex, boxVertexRotated
   , cutIntoN
-  , sequence_', mapM_'
+  , sequence_', mapM_', (><=)
   , rot2D
-  , apply1
   , Autonomie(..), autonomie, auto, runAuto, Autonomic
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Comonad
+import Control.Monad.State.Strict (MonadState)
+import Data.Default
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
-import qualified Data.List.NonEmpty as N
 import Data.Char (toLower)
 
 type Double' = Float
@@ -69,22 +68,14 @@ sequence_' ms = F.foldr (>>) (return ()) ms
 mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
 mapM_' f as = sequence_' (fmap f as)
 
+(><=) :: (MonadState s m) => 
+         Setting (->) s s (S.Seq a) (S.Seq a) -> (S.Seq a) -> m ()
+a ><= b = a %= (S.><) b
+
 rot2D :: Double' -> M22 Double'
 rot2D r = V2
           (V2 (cos(-r)) (-sin(-r)))
           (V2 (sin(-r)) (cos(-r)))
-
--- redefine
--- from http://hackage.haskell.org/package/comonad-4.0/docs/src/Control-Comonad.html
-instance Comonad N.NonEmpty where
-  extend f w@ ~(_ N.:| aas) = f w N.:| case aas of
-      []     -> []
-      (a:as) -> N.toList (extend f (a N.:| as))
-  extract ~(a N.:| _) = a
-  {-# INLINE extract #-}
-
-apply1 :: (a -> a) -> N.NonEmpty a -> N.NonEmpty a
-apply1 f (a N.:| as) = f a N.:| as
 
 data Autonomie m a = Autonomie {
   _auto :: a,
@@ -93,6 +84,12 @@ data Autonomie m a = Autonomie {
 
 makeLensesFor [("_auto", "__auto"),
                ("_runAuto", "__runAuto")] ''Autonomie
+
+instance (Monad m, Default a) => Default (Autonomie m a) where
+  def = Autonomie {
+    _auto = def,
+    _runAuto = return ()
+    }
 
 class Autonomic c m a | c -> a, c -> m where
   autonomie :: Lens' c (Autonomie m a)
@@ -111,3 +108,4 @@ instance (Eq a) => Eq (Autonomie m a) where
 
 instance (Show a) => Show (Autonomie m a) where
   show a = show $ a^.auto
+  

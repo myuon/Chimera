@@ -1,5 +1,6 @@
 module Chimera.Scripts (
-  shots, getPlayer, get', put', effs, charaEffs
+  appearAt, keeper,
+  liftS, getPlayer, shots, effs, globalEffs, get', put'
   , initEnemy
   , MotionCommon(..)
   , motionCommon
@@ -14,28 +15,40 @@ import Control.Monad
 import Control.Monad.Operational.Mini
 import Control.Monad.State.Strict (get, put, execState, State)
 import qualified Data.Vector as V
+import qualified Data.Sequence as S
 
 import Chimera.STG.Util
 import Chimera.STG.World
 import Chimera.Load
 
-shots :: [Bullet] -> Danmaku ()
-shots = singleton . Shots
+-- APIs for Stage Monad
+appearAt :: Int -> Enemy -> Stage ()
+appearAt n e = wait n >> appear e
 
-getPlayer :: Danmaku Player
-getPlayer = singleton $ GetPlayer
+keeper :: Enemy -> Stage ()
+keeper e = appear e >> stop
 
-get' :: Danmaku Enemy
-get' = singleton $ Get
+-- APIs for Danmaku Monad
+liftS :: State c () -> Danmaku c ()
+liftS = liftLocal
 
-put' :: Enemy -> Danmaku ()
-put' = singleton . Put
+getPlayer :: Danmaku c Player
+getPlayer = liftGlobal $ use player
 
-effs :: [Effect] -> Danmaku ()
-effs = singleton . Effects
+shots :: [Bullet] -> Danmaku c ()
+shots bs = liftGlobal $ bulletEQ ><= (S.fromList bs)
 
-charaEffs :: [Effect] -> Danmaku ()
-charaEffs = singleton . CharaEffects
+effs :: [Effect] -> Danmaku EnemyObject ()
+effs es = liftS $ effectEnemy ><= (S.fromList es)
+
+globalEffs :: [Effect] -> Danmaku c ()
+globalEffs es = liftGlobal $ effectsQ ><= (S.fromList es)
+
+get' :: Danmaku c c
+get' = getLocal
+
+put' :: c -> Danmaku c ()
+put' = putLocal
 
 initEnemy :: Vec -> Int -> Resource -> Enemy
 initEnemy p h res =
@@ -46,7 +59,7 @@ initEnemy p h res =
 
 data MotionCommon = Straight | Affine Vec | Curve Vec | Stay
 
-motionCommon :: Int -> MotionCommon -> State Enemy ()
+motionCommon :: Int -> MotionCommon -> State EnemyObject ()
 motionCommon time (Straight) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
@@ -81,10 +94,10 @@ motionCommon _ (Stay) = do
     spXY .= 0
     stateInt .= fromEnum Attack
 
-zakoCommon :: Int -> State Enemy () -> Int -> BKind -> BColor -> Danmaku ()
+zakoCommon :: Int -> State EnemyObject () -> Int -> BKind -> BColor -> Danmaku EnemyObject ()
 zakoCommon 0 mot time bk c = do
   e <- get'
-  put' $ mot `execState` e
+  liftS mot
   res <- getResource
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
@@ -97,10 +110,10 @@ zakoCommon 0 mot time bk c = do
       img .~ (bulletBitmap bk c (snd $ res^.bulletImg)) $
       def
 
-debug :: Danmaku ()
+debug :: Danmaku EnemyObject ()
 debug = do
   e <- get'
-  put' $ motionCommon 100 Stay `execState` e
+  liftS $ motionCommon 100 Stay  
   res <- getResource
   let cnt = e ^. counter
   let n = 20
