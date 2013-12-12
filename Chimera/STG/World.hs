@@ -1,25 +1,20 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
-  Enemy
-  , AtEnemy
-  , Field(..)
-  , player, enemy, bulletP, bulletE, stage, resource, counterF, isDebug, effects
-  , loadField
+  Danmaku
+  , Bullet, Enemy, Stage, Field(..), loadField
+  , player, enemy, bulletP, bulletE, effects
+  , enemyQ, bulletEQ, effectsQ
+  , stage, resource, counterF, isDebug
+  , liftLocal, liftGlobal
   , runDanmaku, runStage
-
-  , getResource
-  , Pattern(..)
-  , Danmaku
-  , Line(..), Stage, appear, wait, appearAt, keeper
   , module Chimera.STG.Types
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Arrow
 import Control.Lens
-import Control.Monad.State.Strict (get, put, modify, execStateT, State, StateT)
+import Control.Monad.State.Strict (get, put, execState, runState, State)
 import Control.Monad.Operational.Mini
-import Control.Monad.Operational.TH (makeSingletons)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import Data.Default
@@ -29,51 +24,20 @@ import Chimera.STG.Util
 import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
-class HasGetResource c where
-  getResource :: c Resource
+type Danmaku c = Runner c Field
 
-data Pattern p where
-  Shots :: [Bullet] -> Pattern ()
-  GetPlayer :: Pattern Player
-  Get :: Pattern Enemy
-  Put :: Enemy -> Pattern ()
-  GetResourcePattern :: Pattern Resource
-  Effects :: [Effect] -> Pattern ()
-  CharaEffects :: [Effect] -> Pattern ()
+type Bullet = Autonomie (Danmaku BulletObject) BulletObject
+type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
 
-type Danmaku = Program Pattern
+type Stage = ReifiedProgram (Line Enemy)
 
-getResourcePattern :: Danmaku Resource
-getResourcePattern = singleton GetResourcePattern
-
-instance HasGetResource Danmaku where
-  getResource = getResourcePattern
-
-type Enemy = Autonomie Danmaku EnemyObject
+instance HasObject Bullet where object = auto . object
+instance HasBulletObject Bullet where bulletObject = auto
 
 instance HasStateInt Enemy where stateInt = auto . stateInt
 instance HasObject Enemy where object = auto . object
 instance HasChara Enemy where chara = auto . chara
 instance HasEnemyObject Enemy where enemyObject = auto
-
-instance Default Enemy where
-  def = Autonomie {
-    _auto = def,
-    _runAuto = return ()
-  }
-
-data Line p where
-  GetResourceLine :: Line Resource
-  Appear :: Enemy -> Line ()
-  Wait :: Int -> Line ()
-  Stop :: Line ()
-
-makeSingletons ''Line
-
-type Stage = ReifiedProgram Line
-
-instance HasGetResource Stage where
-  getResource = getResourceLine
 
 data Field = Field {
   _player :: Player,
@@ -81,6 +45,10 @@ data Field = Field {
   _bulletP :: S.Seq Bullet,
   _bulletE :: S.Seq Bullet,
   _effects :: S.Seq Effect,
+  
+  _enemyQ :: S.Seq Enemy,
+  _bulletEQ :: S.Seq Bullet,
+  _effectsQ :: S.Seq Effect,
 
   _stage :: Stage (),
   _resource :: Resource,
@@ -97,6 +65,10 @@ instance Default Field where
     _bulletP = S.empty,
     _bulletE = S.empty,
     _effects = S.empty,
+    
+    _enemyQ = S.empty,
+    _bulletEQ = S.empty,
+    _effectsQ = S.empty,
 
     _stage = return (),
     _resource = undefined,
@@ -109,25 +81,17 @@ loadField f =
   player .~ ((img .~ (fst $ (f^.resource)^.charaImg)) $ def) $
   f
 
-type AtEnemy = LookAt Enemy Field
+runDanmaku :: Danmaku c () -> State (LookAt c Field) ()
+runDanmaku = runPattern
 
-runDanmaku :: Danmaku () -> State AtEnemy ()
-runDanmaku = interpret step
-  where
-    step :: Pattern a -> State AtEnemy a
-    step GetResourcePattern = use global >>= \f -> return $ f ^. resource
-    step Get = use local
-    step (Put e) = local .= e
-    step (Shots bs) = (local.shotQ) %= (S.><) (S.fromList bs)
-    step GetPlayer = use global >>= \f -> return $ f ^. player
-    step (Effects es) = (local.effQ) %= (S.><) (S.fromList es)
-    step (CharaEffects es) = (local.charaEffects) %= (S.><) (S.fromList es)
+instance HasGetResource (Danmaku c) where
+  getResource = (^.resource) `fmap` getGlobal
 
-appearAt :: Int -> Enemy -> Stage ()
-appearAt n e = wait n >> appear e
+liftGlobal :: State Field a -> Danmaku c a
+liftGlobal = liftState getGlobal putGlobal
 
-keeper :: Enemy -> Stage ()
-keeper e = appear e >> stop
+liftLocal :: State c a -> Danmaku c a
+liftLocal = liftState getLocal putLocal
 
 runStage :: Stage () -> State (LookAt (Maybe Enemy) Field) (Stage ())
 runStage (GetResourceLine :>>= next) = next `fmap` use (global.resource)
@@ -142,4 +106,6 @@ runStage line@(Stop :>>= next) = do
     True -> return (next ())
     False -> return line
 runStage line@(Return _) = return line
+
+instance HasGetResource Stage where getResource = getResourceLine
 
