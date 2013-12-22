@@ -9,10 +9,8 @@ import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton, inter
 import Control.Monad.Operational.TH (makeSingletons)
 import Control.Monad.State.Strict (State, execState, runState)
 import Control.Monad.Trans.Class (lift)
-import Control.Comonad
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
-import qualified Data.List.NonEmpty as N
 import Data.Default
 
 import Chimera.STG.Util
@@ -20,7 +18,6 @@ import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
 class HasGetResource c where getResource :: c Resource
-class HasStateInt c where stateInt :: Lens' c Int
 
 data LookAt p q = LookAt {
   _local :: p,
@@ -103,13 +100,10 @@ makeClassy ''EffectObject
 type Effect = Autonomie (State EffectObject) EffectObject
 
 instance HasObject EffectObject where object = objectEffect
-instance HasStateInt EffectObject where
-  stateInt = lens (fromEnum . _stateEffect) (\f a -> f & stateEffect .~ toEnum a)
 instance Default EffectObject where def = EffectObject def V.empty Active 3
 
 instance HasEffectObject Effect where effectObject = auto
 instance HasObject Effect where object = auto . objectEffect
-instance HasStateInt Effect where stateInt = auto . stateInt
 
 data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
 
@@ -122,9 +116,6 @@ data Chara = Chara {
 
 makeClassy ''Chara
 
-instance HasStateInt Chara where
-  stateInt = lens (fromEnum . _stateChara) (\f a -> f & stateChara .~ toEnum a)
-
 instance HasObject Chara where object = objectChara
 instance Default Chara where def = Chara def Alive 0 S.empty
 
@@ -135,7 +126,6 @@ data Player = Player {
 
 makeLenses ''Player
 
-instance HasStateInt Player where stateInt = chara . stateInt
 instance HasChara Player where chara = charaPlayer
 instance HasObject Player where object = chara . object
 
@@ -150,14 +140,18 @@ instance Default Player where
     _keys = def
     }
 
+data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+
 data BulletObject = BulletObject {
-  _objectBullet :: Object
+  _objectBullet :: Object,
+  _stateBullet :: StateBullet
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
 
 instance HasObject BulletObject where object = objectBullet
-instance Default BulletObject where def = BulletObject (size .~ V2 3 3 $ def)
+instance Default BulletObject where
+  def = BulletObject (size .~ V2 3 3 $ def) EnemyB
 
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
@@ -166,7 +160,6 @@ data EnemyObject = EnemyObject {
 
 makeClassy ''EnemyObject
 
-instance HasStateInt EnemyObject where stateInt = chara . stateInt
 instance HasChara EnemyObject where chara = charaEnemy
 instance HasObject EnemyObject where object = chara . object
 

@@ -16,11 +16,15 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable Chimera
-  -- main-is:             
+  main-is:           Main.hs
   -- other-modules:       
   build-depends:     base >=4.3 && <5
                    , free-game >=0.9 && <1.0
-                   , lens ==3.10.*
+                   , lens >=3.9
                    , mtl ==2.1.*
                    , time ==1.4.*
                    , minioperational ==0.4.*
+                   , containers >=0.5
+                   , data-default >=0.5
+                   , vector >=0.10
+                   , transformers >=0.2

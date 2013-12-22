@@ -7,6 +7,7 @@ module Chimera.Scripts (
   , zakoCommon
   , debug
   , effEnemyDead, effPlayerDead
+  , chaosBomb
   ) where
 
 import Graphics.UI.FreeGame
@@ -33,16 +34,16 @@ liftS :: State c () -> Danmaku c ()
 liftS = liftLocal
 
 getPlayer :: Danmaku c Player
-getPlayer = liftGlobal $ use player
+getPlayer = (^.player) `fmap` readGlobal
 
 shots :: [Bullet] -> Danmaku c ()
-shots bs = liftGlobal $ bulletEQ ><= (S.fromList bs)
+shots bs = liftGlobal $ bullets ><= (S.fromList bs)
 
 effs :: [Effect] -> Danmaku EnemyObject ()
 effs es = liftS $ effectEnemy ><= (S.fromList es)
 
 globalEffs :: [Effect] -> Danmaku c ()
-globalEffs es = liftGlobal $ effectsQ ><= (S.fromList es)
+globalEffs es = liftGlobal $ effects ><= (S.fromList es)
 
 get' :: Danmaku c c
 get' = getLocal
@@ -65,34 +66,34 @@ motionCommon time (Straight) = do
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateInt .= fromEnum Attack
+    stateChara .= Attack
   when (c == time + 120) $ do
     spXY .= V2 0 (-1.5)
-    stateInt .= fromEnum Alive
-  when (c > time + 300) $ stateInt .= fromEnum Dead
+    stateChara .= Alive
+  when (c > time + 300) $ stateChara .= Dead
 motionCommon time (Affine v) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateInt .= fromEnum Attack
+    stateChara .= Attack
   when (c == time + 120) $ do
     spXY .= v
-    stateInt .= fromEnum Alive
-  when (c > time + 300) $ stateInt .= fromEnum Dead
+    stateChara .= Alive
+  when (c > time + 300) $ stateChara .= Dead
 motionCommon _ (Curve acc) = do
   c <- use counter
   when (c == 0) $ do
     spXY .= V2 0 3
-    stateInt .= fromEnum Attack
-  when (c > 300) $ stateInt .= fromEnum Dead
+    stateChara .= Attack
+  when (c > 300) $ stateChara .= Dead
   spXY %= (+ acc)
 motionCommon _ (Stay) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateInt .= fromEnum Attack
+    stateChara .= Attack
 
 zakoCommon :: Int -> State EnemyObject () -> Int -> BKind -> BColor -> Danmaku EnemyObject ()
 zakoCommon 0 mot time bk c = do
@@ -102,7 +103,7 @@ zakoCommon 0 mot time bk c = do
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
 
-  when ((e^.counter) `mod` time == 0 && e^.stateInt == fromEnum Attack) $
+  when ((e^.counter) `mod` time == 0 && e^.stateChara == Attack) $
     shots $ return $
       pos .~ (e^.pos) $ 
       speed .~ 3 $
@@ -142,7 +143,7 @@ effEnemyDead res p =
       let i = (f^.counter) `div` (f^.slowRate)
       img .= res V.! i
       counter %= (+1)
-      when (i == V.length res) $ stateInt .= fromEnum Inactive
+      when (i == V.length res) $ stateEffect .= Inactive
 
 effPlayerDead :: Resource -> Vec -> Effect
 effPlayerDead res p =
@@ -162,5 +163,31 @@ effPlayerDead res p =
       img .= res V.! i
       size *= 1.01
       counter %= (+1)
-      when (i == V.length res) $ stateInt .= fromEnum Inactive
+      when (i == V.length res) $ stateEffect .= Inactive
 
+chaosBomb :: Resource -> Vec -> Bullet
+chaosBomb res p =
+  pos .~ p $
+  img .~ (bulletBitmap BallFrame Magenta (snd $ res^.bulletImg)) $
+  runAuto .~ run $
+  stateBullet .~ PlayerB $
+  def
+  
+  where
+    bomb :: (HasObject c) => c -> Bullet -> Bullet
+    bomb e b = case b^.stateBullet == EnemyB && 
+                    100^2 > (quadrance $ b^.pos - e^.pos) of 
+      True -> chaosBomb res (b^.pos)
+      False -> b
+    
+    run :: Danmaku BulletObject ()
+    run = do
+      res <- getResource
+      e <- get'
+      when (e^.counter == 0) $ globalEffs $ [effEnemyDead res p]
+      when (e^.counter == 5) $ liftGlobal $ bullets %= fmap (bomb e)
+      
+      liftS $ do
+        counter %= (+1)
+        c <- use counter
+        when (c == 10) $ stateBullet .= Outside

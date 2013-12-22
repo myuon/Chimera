@@ -1,9 +1,9 @@
-{-# LANGUAGE TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Chimera where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (execState, execStateT)
+import Control.Monad.State.Strict
 import qualified Data.Sequence as S
 import Data.Default
 
@@ -22,14 +22,6 @@ data GameFrame = GameFrame {
 
 makeLenses ''GameFrame
 
-initGameFrame :: GameFrame
-initGameFrame = GameFrame {
-  _screenMode = 0,
-  _field = undefined,
-  _font = undefined,
-  _prevTime = undefined
-  }
-
 start :: GUIParam
 start =
   windowRegion .~ BoundingBox 0 0 640 480 $
@@ -38,32 +30,25 @@ start =
   clearColor .~ Color 0 0 0.2 1.0 $
   def
 
-step :: Game Bool
-step = do
-  tick
-  keySpecial KeyEsc
-
-mainloop :: GameFrame -> Game GameFrame
-mainloop gf = do
+mainloop :: StateT GameFrame Game ()
+mainloop = do
+  gf <- get
   time' <- embedIO getCurrentTime
+  prevTime .= time'
   let fps' = getFPS $ diffUTCTime time' (gf ^. prevTime)
 
-  STG.draw `execStateT` (gf ^. field)
+  lift $ STG.draw `execStateT` (gf ^. field)
+  
+  let write y = translate (V2 0 y) . colored white . text (gf ^. font) 20
   write 20 $ "fps:" ++ show fps'
-  write 40 $ "bulletE:" ++ show (S.length $ gf ^. field ^. STG.bulletE)
+  write 40 $ "bullets:" ++ show (S.length $ gf ^. field ^. STG.bullets)
+  write 60 $ "enemies:" ++ show (S.length $ gf ^. field ^. STG.enemy)
   
-  let f' = STG.update `execState` (gf ^. field)
-  keys' <- STG.updateKeys (gf ^. field ^. STG.player ^. STG.keys)
+  keys <- use $ field . STG.player . STG.keys
+  field . STG.player . STG.keys <~ (lift $ STG.updateKeys keys)
+  field %= execState STG.update
   
-  return $
-    field .~ (STG.player . STG.keys .~ keys' $ f') $
-    prevTime .~ time' $
-    gf
-
   where  
-    write :: Float -> String -> Game ()
-    write y = translate (V2 0 y) . colored white . text (gf ^. font) 20
-
     getFPS :: (RealFrac a, Fractional a) => a -> Int
     getFPS diff = floor $ 1 / diff
 
@@ -71,23 +56,21 @@ game :: IO (Maybe a)
 game = runGame start $ do
   font' <- embedIO $ loadFont "data/font/VL-PGothic-Regular.ttf"
   time' <- embedIO getCurrentTime
-  let field' = STG.loadStage (STG.isDebug .~ False $ def)
+  let field' = STG.loadStage (STG.isDebug .~ True $ def)
   
-  step
   translate (V2 30 30) . colored white . text (font') 20 $ "読み込み中…"
-  step
   execLoad font' (field'^.STG.resource)
   
-  run $
-    field .~ field' $
-    font .~ font' $
-    prevTime .~ time' $
-    initGameFrame
-  quit
+  let frame = GameFrame {
+        _screenMode = 0,
+        _field = field',
+        _font = font',
+        _prevTime = time'
+        }
   
-  where
-    run :: GameFrame -> Game ()
-    run gf = do
-      gf' <- mainloop gf
-      step >>= flip unless (run gf')
-  
+  flip evalStateT frame $ foreverTick $ do
+    mainloop
+    
+    esc <- keySpecial KeyEsc
+    when (esc) $ quit
+

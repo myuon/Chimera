@@ -11,7 +11,6 @@ import Control.Monad.State.Strict (get, put, execState, State)
 import Control.Monad.Trans.Class (lift)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
-import qualified Data.List.NonEmpty as N
 
 import Chimera.STG.Util
 import Chimera.STG.World
@@ -52,7 +51,7 @@ boss1 = do
   
   let go = go' res
   let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ (def :: Bullet)
-  when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateInt == fromEnum Attack) $ do
+  when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
@@ -97,7 +96,7 @@ boss1 = do
           img .= res V.! i
           size *= 1.01
           counter %= (+1)
-          when (i == V.length res - 1) $ stateInt .= fromEnum Inactive
+          when (i == V.length res - 1) $ stateEffect .= Inactive
     
     effAttack :: Int -> Resource -> Vec -> Effect
     effAttack i res p =
@@ -143,7 +142,7 @@ boss2 = do
             effAttack 1 res (e^.pos),
             effAttack 2 res (e^.pos)]
   
-  when (e^.counter `mod` 50 == 0 && e^.stateInt == fromEnum Attack) $ do
+  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [0..5] $ \i ->
       pos .~ e^.pos $
       speed .~ 2 $
@@ -151,7 +150,7 @@ boss2 = do
       img .~ (bulletBitmap BallMedium (toEnum $ i*2 `mod` 8) (snd $ res^.bulletImg)) $
       runAuto %~ (\f -> go i >> f) $
       def
-  when (e^.counter `mod` 100 == 0 && e^.stateInt == fromEnum Attack) $ do
+  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
     shots $ return $
       pos .~ e^.pos $
       speed .~ 1.5 $

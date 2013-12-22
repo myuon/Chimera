@@ -6,4 +6,6 @@
 *.prof
 Main
 Graphics/
-.*
+cabal.sandbox.config
+.cabal-sandbox/
+dist/
