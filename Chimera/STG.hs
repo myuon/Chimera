@@ -15,7 +15,7 @@ import Control.Monad.Trans.Class (lift)
 
 import Chimera.STG.World as M
 import Chimera.STG.Util
-import Chimera.Load
+import Chimera.STG.Load as M
 import Chimera.STG.UI as M
 
 import Chimera.Scripts
@@ -29,15 +29,13 @@ stage2 = do
   keeper $ initEnemy (V2 260 40) 2 res & runAuto .~ debug
 
 loadStage :: Field -> Field
-loadStage f =
-  loadField $
-  stage .~ stage1 $
-  resource .~ load1 $
-  f
+loadStage f = f
+  & stage .~ stage1
+  & resource .~ load1
 
 class GUIClass c where
   update :: State c ()
-  draw :: StateT c Game ()
+  draw :: Resource -> StateT c Game ()
 
 instance GUIClass Player where
   update = do
@@ -55,9 +53,9 @@ instance GUIClass Player where
         addTup (key ^. left  > 0) (-1,0) $
         fromPair (0,0)
 
-  draw = do
+  draw res = do
     p <- get
-    translate (p ^. pos) $ fromBitmap (p ^. img)
+    translate (p ^. pos) $ fromBitmap (picture res p)
 
 clamp :: Vec -> Vec
 clamp = fromPair . (edgeX *** edgeY) . toPair
@@ -75,12 +73,13 @@ instance GUIClass Enemy where
     counter %= (+1)
     h <- use hp
     when (h <= 0) $ stateChara .= Dead
-    effectEnemy %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (\e -> update `execState` e)
+    effectEnemy %= 
+      S.filter (\e -> e^.stateEffect /= Inactive) . fmap (\e -> update `execState` e)
   
-  draw = do
+  draw res = do
     e <- get
-    mapM_' (\e -> lift $ draw `execStateT` e) (e^.effectEnemy)
-    translate (e^.pos) $ fromBitmap (e^.img)
+    mapM_' (\e -> lift $ draw res `execStateT` e) (e^.effectEnemy)
+    translate (e^.pos) $ fromBitmap (picture res e)
 
 instance GUIClass Bullet where
   update = do
@@ -90,18 +89,19 @@ instance GUIClass Bullet where
     p <- use pos
     when (isInside p == False) $ stateBullet .= Outside
 
-  draw = do
+  draw res = do
     b <- get
-    translate (b^.pos) $ rotateR (b^.angle + pi/2) $ fromBitmap (b^.img)
+    translate (b^.pos) $ rotateR (b^.angle + pi/2) $ fromBitmap (picture res b)
 
 instance GUIClass Effect where
   update = do
     run <- use runAuto
     effectObject %= execState run
   
-  draw = do
+  draw res = do
     b <- get
-    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ fromBitmap (b^.img)
+    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ 
+      fromBitmap (b^.img $ res)
 
 instance GUIClass Field where
   update = do
@@ -132,12 +132,13 @@ instance GUIClass Field where
     player %= execState update
     effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
       
-  draw = do
+  draw _ = do
     f <- get
-    mapM_' (\p -> lift $ draw `execStateT` p) (f^.bullets)
-    lift $ draw `execStateT` (f^.player)
-    mapM_' (\e -> lift $ draw `execStateT` e) (f^.enemy)
-    mapM_' (\e -> lift $ draw `execStateT` e) (f^.effects)
+    res <- use resource
+    mapM_' (\p -> lift $ draw res `execStateT` p) (f^.bullets)
+    lift $ draw res `execStateT` (f^.player)
+    mapM_' (\e -> lift $ draw res `execStateT` e) (f^.enemy)
+    mapM_' (\e -> lift $ draw res `execStateT` e) (f^.effects)
 
     when (f^.isDebug) $ do
       mapM_' (\b -> colored blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
@@ -186,7 +187,8 @@ addBullet = do
     def' res = 
       speed .~ 15 $
       angle .~ pi/2 $ 
-      img .~ (bulletBitmap Diamond Red (snd $ res^.bulletImg)) $
+      kind .~ Diamond $
+      color .~ Red $
       stateBullet .~ PlayerB $
       def
 

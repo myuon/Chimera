@@ -14,7 +14,7 @@ import qualified Data.Sequence as S
 
 import Chimera.STG.Util
 import Chimera.STG.World
-import Chimera.Load
+import Chimera.STG.Load
 import Chimera.Scripts
 
 load1 :: Resource
@@ -43,11 +43,11 @@ boss1 = do
   e <- get'
   liftS $ motionCommon 100 Stay
   res <- getResource
-  when (e^.counter == 130) $ effs $ return $ effStart res (e^.pos)
+  when (e^.counter == 130) $ effs $ return $ effEnemyStart res (e^.pos)
   when (e^.counter == 200) $
-    effs $ [effAttack 0 res (e^.pos),
-            effAttack 1 res (e^.pos),
-            effAttack 2 res (e^.pos)]
+    effs $ [effEnemyAttack 0 res (e^.pos),
+            effEnemyAttack 1 res (e^.pos),
+            effEnemyAttack 2 res (e^.pos)]
   
   let go = go' res
   let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ (def :: Bullet)
@@ -55,70 +55,33 @@ boss1 = do
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
-      img .~ (bulletBitmap Oval Red (snd $ res^.bulletImg)) $
+      kind .~ Oval $
+      color .~ Red $
       runAuto %~ (\f -> go 190 300 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 3 $
       angle +~ 2*pi*i/4 $
-      img .~ (bulletBitmap Oval Yellow (snd $ res^.bulletImg)) $
+      kind .~ Oval $
+      color .~ Yellow $
       runAuto %~ (\f -> go 135 290 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 2.5 $
       angle +~ 2*pi*i/4 $
-      img .~ (bulletBitmap Oval Green (snd $ res^.bulletImg)) $
+      kind .~ Oval $
+      color .~ Green $
       runAuto %~ (\f -> go 120 280 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
       speed .~ 2.2 $
       angle +~ 2*pi*i/4 $
-      img .~ (bulletBitmap Oval Blue (snd $ res^.bulletImg)) $
+      kind .~ Oval $
+      color .~ Blue $
       runAuto %~ (\f -> go 100 270 >> f) $
       def'
 
   where
-    effStart :: Resource -> Vec -> Effect
-    effStart res p =
-      pos .~ p $
-      ress .~ (res^.effectImg) V.! 2 $
-      size .~ V2 0.8 0.8 $
-      slowRate .~ 6 $
-      runAuto .~ run $
-      def
-
-      where
-        run :: State EffectObject ()
-        run = do
-          f <- get
-          res <- use ress
-          let i = (f^.counter) `div` (f^.slowRate)
-          img .= res V.! i
-          size *= 1.01
-          counter %= (+1)
-          when (i == V.length res - 1) $ stateEffect .= Inactive
-    
-    effAttack :: Int -> Resource -> Vec -> Effect
-    effAttack i res p =
-      pos .~ p $
-      img .~ (res^.effectImg) V.! 3 V.! i $
-      runAuto .~ run $
-      (def :: Effect)
-
-      where
-        run :: State EffectObject ()
-        run = do
-          f <- get
-          when (f^.counter <= 50) $ size += 1/50
-          res <- use ress
-          angle += anglePlus i
-          counter %= (+1)
-        
-        anglePlus :: Int -> Double'
-        anglePlus 0 = 1/300
-        anglePlus 1 = -2/300
-        anglePlus 2 = 3/300
-        
     go' :: Resource -> Double' -> Double' -> Danmaku BulletObject ()
     go' res t1 t2 = liftS $ do
       counter %= (+1)
@@ -127,7 +90,8 @@ boss1 = do
         angle %= (+ pi/t1)
         speed %= (subtract (7.0/t2))
       when (cnt == 170) $ do
-        img .= bulletBitmap BallTiny Purple (snd $ res^.bulletImg)
+        kind .= BallTiny
+        color .= Purple
   
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
@@ -138,16 +102,16 @@ boss2 = do
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
   let go = go' res
   when (e^.counter == 150) $
-    effs $ [effAttack 0 res (e^.pos),
-            effAttack 1 res (e^.pos),
-            effAttack 2 res (e^.pos)]
+    effs $ [effEnemyAttack 0 res (e^.pos),
+            effEnemyAttack 1 res (e^.pos),
+            effEnemyAttack 2 res (e^.pos)]
   
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [0..5] $ \i ->
       pos .~ e^.pos $
       speed .~ 2 $
       angle .~ ang + fromIntegral i*2*pi/5 $
-      img .~ (bulletBitmap BallMedium (toEnum $ i*2 `mod` 8) (snd $ res^.bulletImg)) $
+      color .~ (toEnum $ i*2 `mod` 8) $
       runAuto %~ (\f -> go i >> f) $
       def
   when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
@@ -155,31 +119,11 @@ boss2 = do
       pos .~ e^.pos $
       speed .~ 1.5 $
       angle .~ ang $
-      img .~ (bulletBitmap BallLarge Purple (snd $ res^.bulletImg)) $
+      kind .~ BallLarge $
+      color .~ Purple $
       def
   
   where
-    effAttack :: Int -> Resource -> Vec -> Effect
-    effAttack i res p =
-      pos .~ p $
-      img .~ (res^.effectImg) V.! 3 V.! i $
-      runAuto .~ run $
-      (def :: Effect)
-
-      where
-        run :: State EffectObject ()
-        run = do
-          f <- get
-          when (f^.counter <= 50) $ size += 1/50
-          res <- use ress
-          angle += anglePlus i
-          counter %= (+1)
-        
-        anglePlus :: Int -> Double'
-        anglePlus 0 = 1/300
-        anglePlus 1 = -2/300
-        anglePlus 2 = 3/300
-
     go' :: Resource -> Int -> Danmaku BulletObject ()
     go' res n = do
       b <- get'

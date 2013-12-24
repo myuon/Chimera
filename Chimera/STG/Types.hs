@@ -14,8 +14,16 @@ import qualified Data.Vector as V
 import Data.Default
 
 import Chimera.STG.Util
-import Chimera.Load
 import qualified Chimera.STG.UI as UI
+
+data Resource = Resource {
+  _charaImg :: V.Vector Bitmap,
+  _bulletImg :: V.Vector (V.Vector Bitmap),
+  _effectImg :: V.Vector (V.Vector Bitmap),
+  _board :: Bitmap
+  }
+
+makeLenses ''Resource
 
 class HasGetResource c where getResource :: c Resource
 
@@ -69,7 +77,6 @@ data Object = Object {
   _angle :: Double',
   
   _counter :: Int,
-  _img :: Bitmap,
   _size :: Vec
   } deriving (Eq, Show)
 
@@ -82,7 +89,6 @@ instance Default Object where
     _speed = 0,
     _angle = 0,
     _counter = 0,
-    _img = undefined,
     _size = V2 0 0
     }
 
@@ -90,9 +96,9 @@ data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
 
 data EffectObject = EffectObject {
   _objectEffect :: Object,
-  _ress :: V.Vector Bitmap,
   _stateEffect :: StateEffect,
-  _slowRate :: Int
+  _slowRate :: Int,
+  _img :: Resource -> Bitmap
   }
 
 makeClassy ''EffectObject
@@ -100,7 +106,13 @@ makeClassy ''EffectObject
 type Effect = Autonomie (State EffectObject) EffectObject
 
 instance HasObject EffectObject where object = objectEffect
-instance Default EffectObject where def = EffectObject def V.empty Active 3
+instance Default EffectObject where
+  def = EffectObject { 
+    _objectEffect = def, 
+    _stateEffect = Active,
+    _slowRate = 3,
+    _img = undefined
+    }
 
 instance HasEffectObject Effect where effectObject = auto
 instance HasObject Effect where object = auto . objectEffect
@@ -141,17 +153,30 @@ instance Default Player where
     }
 
 data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+data BKind = BallLarge | BallMedium | BallSmall | 
+             Oval | Diamond | Needle | BallFrame | BallTiny
+  deriving (Eq, Ord, Enum, Show)
+
+data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+  deriving (Eq, Ord, Enum, Show)
 
 data BulletObject = BulletObject {
   _objectBullet :: Object,
-  _stateBullet :: StateBullet
+  _stateBullet :: StateBullet,
+  _kind :: BKind,
+  _color :: BColor
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
 
 instance HasObject BulletObject where object = objectBullet
 instance Default BulletObject where
-  def = BulletObject (size .~ V2 3 3 $ def) EnemyB
+  def = BulletObject { 
+    _objectBullet = (size .~ V2 3 3 $ def),
+    _stateBullet = EnemyB,
+    _kind = BallMedium,
+    _color = Red
+    }
 
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,

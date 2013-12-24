@@ -28,3 +28,4 @@ executable Chimera
                    , data-default >=0.5
                    , vector >=0.10
                    , transformers >=0.2
+  ghc-options:       -O2

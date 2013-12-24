@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
   Danmaku
-  , Bullet, Enemy, Stage, Field(..), loadField
+  , Bullet, Enemy, Stage, Field(..)
   , player, enemy, bullets, effects
   , stage, resource, counterF, isDebug
   , liftLocal, liftGlobal, readGlobal
@@ -20,7 +20,6 @@ import Data.Default
 
 import Chimera.STG.Types
 import Chimera.STG.Util
-import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
 type Danmaku c = Runner c (Field, S.Seq (State Field ()))
@@ -53,7 +52,7 @@ makeLenses ''Field
 
 instance Default Field where
   def = Field {
-    _player = undefined,
+    _player = def,
     _enemy = S.empty,
     _bullets = S.empty,
     _effects = S.empty,
@@ -63,11 +62,6 @@ instance Default Field where
     _counterF = 0,
     _isDebug = False
     }
-
-loadField :: Field -> Field
-loadField f =
-  player .~ ((img .~ (fst $ (f^.resource)^.charaImg)) $ def) $
-  f
 
 runDanmaku :: Danmaku c () -> State (LookAt c (Field, S.Seq (State Field ()))) ()
 runDanmaku = runPattern

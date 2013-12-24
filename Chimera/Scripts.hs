@@ -6,7 +6,7 @@ module Chimera.Scripts (
   , motionCommon
   , zakoCommon
   , debug
-  , effEnemyDead, effPlayerDead
+  , effEnemyDead, effPlayerDead, effEnemyStart, effEnemyAttack
   , chaosBomb
   ) where
 
@@ -20,7 +20,7 @@ import qualified Data.Sequence as S
 
 import Chimera.STG.Util
 import Chimera.STG.World
-import Chimera.Load
+import Chimera.STG.Load
 
 -- APIs for Stage Monad
 appearAt :: Int -> Enemy -> Stage ()
@@ -55,7 +55,6 @@ initEnemy :: Vec -> Int -> Resource -> Enemy
 initEnemy p h res =
   pos .~ p $
   hp .~ h $
-  img .~ (snd $ res^.charaImg) $
   def
 
 data MotionCommon = Straight | Affine Vec | Curve Vec | Stay
@@ -108,7 +107,8 @@ zakoCommon 0 mot time bk c = do
       pos .~ (e^.pos) $ 
       speed .~ 3 $
       angle .~ ang $
-      img .~ (bulletBitmap bk c (snd $ res^.bulletImg)) $
+      kind .~ bk $
+      color .~ c $
       def
 
 debug :: Danmaku EnemyObject ()
@@ -124,13 +124,13 @@ debug = do
       pos .~ (e^.pos) $ 
       speed .~ 0.5 $
       angle .~ i*2*pi/n + (fromIntegral cnt)/100 $
-      img .~ (bulletBitmap BallTiny Red (snd $ res^.bulletImg)) $
+      kind .~ BallTiny $
+      color .~ Red $
       def
 
 effEnemyDead :: Resource -> Vec -> Effect
 effEnemyDead res p =
   pos .~ p $
-  ress .~ (res^.effectImg) V.! 0 $
   size .~ V2 1 1 $
   runAuto .~ run $
   (def :: Effect)
@@ -139,45 +139,83 @@ effEnemyDead res p =
     run :: State EffectObject ()
     run = do
       f <- get
-      res <- use ress
       let i = (f^.counter) `div` (f^.slowRate)
-      img .= res V.! i
+      img .= \res -> (res^.effectImg) V.! 0 V.! i
       counter %= (+1)
-      when (i == V.length res) $ stateEffect .= Inactive
+      when (i == V.length ((res^.effectImg) V.! 0)) $ stateEffect .= Inactive
 
 effPlayerDead :: Resource -> Vec -> Effect
 effPlayerDead res p =
   pos .~ p $
-  ress .~ (res^.effectImg) V.! 1 $
   size .~ V2 0.8 0.8 $
   slowRate .~ 5 $
   runAuto .~ run $
-  (def :: Effect)
+  def
 
   where
     run :: State EffectObject ()
     run = do
       f <- get
-      res <- use ress
       let i = (f^.counter) `div` (f^.slowRate)
-      img .= res V.! i
+      img .= \res -> (res^.effectImg) V.! 1 V.! i
       size *= 1.01
       counter %= (+1)
-      when (i == V.length res) $ stateEffect .= Inactive
+      when (i == V.length ((res^.effectImg) V.! 1)) $ stateEffect .= Inactive
+
+effEnemyStart :: Resource -> Vec -> Effect
+effEnemyStart res p =
+  pos .~ p $
+  size .~ V2 0.8 0.8 $
+  slowRate .~ 6 $
+  runAuto .~ run $
+  def
+
+  where
+    run :: State EffectObject ()
+    run = do
+      f <- get
+      let i = (f^.counter) `div` (f^.slowRate)
+      img .= \res -> (res^.effectImg) V.! 2 V.! i
+      size *= 1.01
+      counter %= (+1)
+      when (i == V.length ((res^.effectImg) V.! 2)) $ stateEffect .= Inactive
+    
+effEnemyAttack :: Int -> Resource -> Vec -> Effect
+effEnemyAttack i res p =
+  pos .~ p $
+  img .~ (\res -> (res^.effectImg) V.! 3 V.! i) $
+  runAuto .~ run $
+  def
+
+  where
+    run :: State EffectObject ()
+    run = do
+      f <- get
+      when (f^.counter <= 50) $ size += 1/50
+      angle += anglePlus i
+      counter %= (+1)
+        
+    anglePlus :: Int -> Double'
+    anglePlus 0 = 1/300
+    anglePlus 1 = -2/300
+    anglePlus 2 = 3/300
+        
 
 chaosBomb :: Resource -> Vec -> Bullet
 chaosBomb res p =
   pos .~ p $
-  img .~ (bulletBitmap BallFrame Magenta (snd $ res^.bulletImg)) $
-  runAuto .~ run $
+  kind .~ BallFrame $
+  color .~ Magenta $
+  size .~ V2 100 0 $
   stateBullet .~ PlayerB $
+  runAuto .~ run $
   def
   
   where
     bomb :: (HasObject c) => c -> Bullet -> Bullet
     bomb e b = case b^.stateBullet == EnemyB && 
-                    100^2 > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb res (b^.pos)
+                    (e^.size^._x)^2 > (quadrance $ b^.pos - e^.pos) of 
+      True -> chaosBomb res (b^.pos) & size .~ V2 ((e^.size^._x) / 2) 0
       False -> b
     
     run :: Danmaku BulletObject ()

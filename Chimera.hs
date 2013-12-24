@@ -8,7 +8,6 @@ import qualified Data.Sequence as S
 import Data.Default
 
 import qualified Chimera.STG as STG
-import Chimera.Load
 import Data.Time (UTCTime, getCurrentTime, diffUTCTime)
 
 makeLenses ''GUIParam
@@ -37,7 +36,7 @@ mainloop = do
   prevTime .= time'
   let fps' = getFPS $ diffUTCTime time' (gf ^. prevTime)
 
-  lift $ STG.draw `execStateT` (gf ^. field)
+  lift $ STG.draw undefined `execStateT` (gf ^. field)
   
   let write y = translate (V2 0 y) . colored white . text (gf ^. font) 20
   write 20 $ "fps:" ++ show fps'
@@ -56,10 +55,9 @@ game :: IO (Maybe a)
 game = runGame start $ do
   font' <- embedIO $ loadFont "data/font/VL-PGothic-Regular.ttf"
   time' <- embedIO getCurrentTime
-  let field' = STG.loadStage (STG.isDebug .~ True $ def)
+  let field' = STG.loadStage $ def & STG.resource .~ def
   
-  translate (V2 30 30) . colored white . text (font') 20 $ "読み込み中…"
-  execLoad font' (field'^.STG.resource)
+  STG.execLoad font' (field'^.STG.resource)
   
   let frame = GameFrame {
         _screenMode = 0,
@@ -67,10 +65,10 @@ game = runGame start $ do
         _font = font',
         _prevTime = time'
         }
-  
+    
   flip evalStateT frame $ foreverTick $ do
     mainloop
     
     esc <- keySpecial KeyEsc
-    when (esc) $ quit
+    when esc $ quit
 
