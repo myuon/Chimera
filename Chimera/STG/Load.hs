@@ -27,6 +27,7 @@ instance Default Resource where
     e1 <- loadBitmapFromFile "data/img/lightring.png"
     e2 <- loadBitmapFromFile "data/img/lightbomb.png"
     e3 <- loadBitmapFromFile "data/img/eff1.png"
+    e4 <- loadBitmapFromFile "data/img/eff2.png"
     p1_0 <- loadBitmapFromFile "data/img/pat1_0.png"
     p1_1 <- loadBitmapFromFile "data/img/pat1_1.png"
     p1_2 <- loadBitmapFromFile "data/img/pat1_2.png"
@@ -39,7 +40,8 @@ instance Default Resource where
         V.fromList $ cutIntoN 10 e1,
         V.fromList $ cutIntoN 10 e2,
         V.fromList $ cutIntoN 12 e3,
-        V.fromList [p1_0, p1_1, p1_2]],
+        V.fromList [p1_0, p1_1, p1_2],
+        V.fromList $ cutIntoN 14 e4],
       _board = b
     }
 
@@ -59,6 +61,7 @@ execLoad font res = do
   translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 0
   translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 1
   translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 2
+  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 4 V.! 0
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps img = 

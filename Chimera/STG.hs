@@ -174,9 +174,9 @@ addBullet = do
     res <- use resource
     bullets ><= (S.fromList
       [def' res & pos .~ (p^.pos) + V2 5 0,
-       def' res & pos .~ (p^.pos) + V2 10 0,
+       def' res & pos .~ (p^.pos) + V2 15 0,
        def' res & pos .~ (p^.pos) - V2 5 0,
-       def' res & pos .~ (p^.pos) - V2 10 0])
+       def' res & pos .~ (p^.pos) - V2 15 0])
   
   when (p^.keys^.xKey > 0 && p^.counter `mod` 20 == 0) $ do
     res <- use resource

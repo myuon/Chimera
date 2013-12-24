@@ -133,7 +133,7 @@ effEnemyDead res p =
   pos .~ p $
   size .~ V2 1 1 $
   runAuto .~ run $
-  (def :: Effect)
+  def
 
   where
     run :: State EffectObject ()
@@ -215,17 +215,34 @@ chaosBomb res p =
     bomb :: (HasObject c) => c -> Bullet -> Bullet
     bomb e b = case b^.stateBullet == EnemyB && 
                     (e^.size^._x)^2 > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb res (b^.pos) & size .~ V2 ((e^.size^._x) / 2) 0
+      True -> chaosBomb res (b^.pos) & size .~ V2 ((e^.size^._x) / 1.4) 0
       False -> b
     
     run :: Danmaku BulletObject ()
     run = do
       res <- getResource
       e <- get'
-      when (e^.counter == 0) $ globalEffs $ [effEnemyDead res p]
+      when (e^.counter == 0) $ globalEffs $ [eff res e]
       when (e^.counter == 5) $ liftGlobal $ bullets %= fmap (bomb e)
       
       liftS $ do
         counter %= (+1)
         c <- use counter
         when (c == 10) $ stateBullet .= Outside
+
+    eff :: Resource -> BulletObject -> Effect
+    eff res b = let ratio = (b^.size^._x) / 120 in
+      pos .~ (b^.pos) $
+      size .~ V2 ratio ratio $
+      slowRate .~ 3 $
+      runAuto .~ run $
+      def
+      
+      where
+        run :: State EffectObject ()
+        run = do
+          f <- get
+          let i = (f^.counter) `div` (f^.slowRate)
+          img .= \res -> (res^.effectImg) V.! 4 V.! i
+          counter %= (+1)
+          when (i == V.length ((res^.effectImg) V.! 4)) $ stateEffect .= Inactive
