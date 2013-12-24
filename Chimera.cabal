@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                Chimera
-version:             0.1.0.0
+version:             0.1.1.0
 synopsis:            something fun and new through gaming
 -- description:         
 homepage:            https://github.com/myuon/Chimera
@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable Chimera
-  main-is:           Main.hs
+  main-is:           Chimera.hs
   -- other-modules:       
   build-depends:     base >=4.3 && <5
                    , free-game >=0.9 && <1.0

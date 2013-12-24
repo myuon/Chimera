@@ -1,2 +1,0 @@
-import Chimera
-main = game

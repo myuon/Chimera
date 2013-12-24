@@ -72,3 +72,4 @@ game = runGame start $ do
     esc <- keySpecial KeyEsc
     when esc $ quit
 
+main = game
