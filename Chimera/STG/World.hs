@@ -1,11 +1,10 @@
 {-# LANGUAGE TemplateHaskell, GADTs, RankNTypes, FlexibleContexts, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.STG.World (
   Danmaku
-  , Bullet, Enemy, Stage, Field(..), loadField
-  , player, enemy, bulletP, bulletE, effects
-  , enemyQ, bulletEQ, effectsQ
+  , Bullet, Enemy, Stage, Field(..)
+  , player, enemy, bullets, effects
   , stage, resource, counterF, isDebug
-  , liftLocal, liftGlobal
+  , liftLocal, liftGlobal, readGlobal
   , runDanmaku, runStage
   , module Chimera.STG.Types
   ) where
@@ -21,10 +20,9 @@ import Data.Default
 
 import Chimera.STG.Types
 import Chimera.STG.Util
-import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
-type Danmaku c = Runner c Field
+type Danmaku c = Runner c (Field, S.Seq (State Field ()))
 
 type Bullet = Autonomie (Danmaku BulletObject) BulletObject
 type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
@@ -34,7 +32,6 @@ type Stage = ReifiedProgram (Line Enemy)
 instance HasObject Bullet where object = auto . object
 instance HasBulletObject Bullet where bulletObject = auto
 
-instance HasStateInt Enemy where stateInt = auto . stateInt
 instance HasObject Enemy where object = auto . object
 instance HasChara Enemy where chara = auto . chara
 instance HasEnemyObject Enemy where enemyObject = auto
@@ -42,14 +39,9 @@ instance HasEnemyObject Enemy where enemyObject = auto
 data Field = Field {
   _player :: Player,
   _enemy :: S.Seq Enemy,
-  _bulletP :: S.Seq Bullet,
-  _bulletE :: S.Seq Bullet,
+  _bullets :: S.Seq Bullet,
   _effects :: S.Seq Effect,
   
-  _enemyQ :: S.Seq Enemy,
-  _bulletEQ :: S.Seq Bullet,
-  _effectsQ :: S.Seq Effect,
-
   _stage :: Stage (),
   _resource :: Resource,
   _counterF :: Int,
@@ -60,35 +52,30 @@ makeLenses ''Field
 
 instance Default Field where
   def = Field {
-    _player = undefined,
+    _player = def,
     _enemy = S.empty,
-    _bulletP = S.empty,
-    _bulletE = S.empty,
+    _bullets = S.empty,
     _effects = S.empty,
     
-    _enemyQ = S.empty,
-    _bulletEQ = S.empty,
-    _effectsQ = S.empty,
-
     _stage = return (),
     _resource = undefined,
     _counterF = 0,
     _isDebug = False
     }
 
-loadField :: Field -> Field
-loadField f =
-  player .~ ((img .~ (fst $ (f^.resource)^.charaImg)) $ def) $
-  f
-
-runDanmaku :: Danmaku c () -> State (LookAt c Field) ()
+runDanmaku :: Danmaku c () -> State (LookAt c (Field, S.Seq (State Field ()))) ()
 runDanmaku = runPattern
 
 instance HasGetResource (Danmaku c) where
-  getResource = (^.resource) `fmap` getGlobal
+  getResource = (^.resource) `fmap` (fst `fmap` getGlobal)
 
-liftGlobal :: State Field a -> Danmaku c a
-liftGlobal = liftState getGlobal putGlobal
+liftGlobal :: State Field () -> Danmaku c ()
+liftGlobal u = do
+  f <- getGlobal
+  putGlobal (fst f, u S.<| snd f)
+  
+readGlobal :: Danmaku c Field
+readGlobal = fst `fmap` getGlobal
 
 liftLocal :: State c a -> Danmaku c a
 liftLocal = liftState getLocal putLocal

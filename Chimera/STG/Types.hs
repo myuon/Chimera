@@ -9,18 +9,23 @@ import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton, inter
 import Control.Monad.Operational.TH (makeSingletons)
 import Control.Monad.State.Strict (State, execState, runState)
 import Control.Monad.Trans.Class (lift)
-import Control.Comonad
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
-import qualified Data.List.NonEmpty as N
 import Data.Default
 
 import Chimera.STG.Util
-import Chimera.Load
 import qualified Chimera.STG.UI as UI
 
+data Resource = Resource {
+  _charaImg :: V.Vector Bitmap,
+  _bulletImg :: V.Vector (V.Vector Bitmap),
+  _effectImg :: V.Vector (V.Vector Bitmap),
+  _board :: Bitmap
+  }
+
+makeLenses ''Resource
+
 class HasGetResource c where getResource :: c Resource
-class HasStateInt c where stateInt :: Lens' c Int
 
 data LookAt p q = LookAt {
   _local :: p,
@@ -72,7 +77,6 @@ data Object = Object {
   _angle :: Double',
   
   _counter :: Int,
-  _img :: Bitmap,
   _size :: Vec
   } deriving (Eq, Show)
 
@@ -85,7 +89,6 @@ instance Default Object where
     _speed = 0,
     _angle = 0,
     _counter = 0,
-    _img = undefined,
     _size = V2 0 0
     }
 
@@ -93,9 +96,9 @@ data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
 
 data EffectObject = EffectObject {
   _objectEffect :: Object,
-  _ress :: V.Vector Bitmap,
   _stateEffect :: StateEffect,
-  _slowRate :: Int
+  _slowRate :: Int,
+  _img :: Resource -> Bitmap
   }
 
 makeClassy ''EffectObject
@@ -103,13 +106,16 @@ makeClassy ''EffectObject
 type Effect = Autonomie (State EffectObject) EffectObject
 
 instance HasObject EffectObject where object = objectEffect
-instance HasStateInt EffectObject where
-  stateInt = lens (fromEnum . _stateEffect) (\f a -> f & stateEffect .~ toEnum a)
-instance Default EffectObject where def = EffectObject def V.empty Active 3
+instance Default EffectObject where
+  def = EffectObject { 
+    _objectEffect = def, 
+    _stateEffect = Active,
+    _slowRate = 3,
+    _img = undefined
+    }
 
 instance HasEffectObject Effect where effectObject = auto
 instance HasObject Effect where object = auto . objectEffect
-instance HasStateInt Effect where stateInt = auto . stateInt
 
 data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
 
@@ -122,9 +128,6 @@ data Chara = Chara {
 
 makeClassy ''Chara
 
-instance HasStateInt Chara where
-  stateInt = lens (fromEnum . _stateChara) (\f a -> f & stateChara .~ toEnum a)
-
 instance HasObject Chara where object = objectChara
 instance Default Chara where def = Chara def Alive 0 S.empty
 
@@ -135,7 +138,6 @@ data Player = Player {
 
 makeLenses ''Player
 
-instance HasStateInt Player where stateInt = chara . stateInt
 instance HasChara Player where chara = charaPlayer
 instance HasObject Player where object = chara . object
 
@@ -150,14 +152,31 @@ instance Default Player where
     _keys = def
     }
 
+data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+data BKind = BallLarge | BallMedium | BallSmall | 
+             Oval | Diamond | Needle | BallFrame | BallTiny
+  deriving (Eq, Ord, Enum, Show)
+
+data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+  deriving (Eq, Ord, Enum, Show)
+
 data BulletObject = BulletObject {
-  _objectBullet :: Object
+  _objectBullet :: Object,
+  _stateBullet :: StateBullet,
+  _kind :: BKind,
+  _color :: BColor
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
 
 instance HasObject BulletObject where object = objectBullet
-instance Default BulletObject where def = BulletObject (size .~ V2 3 3 $ def)
+instance Default BulletObject where
+  def = BulletObject { 
+    _objectBullet = (size .~ V2 3 3 $ def),
+    _stateBullet = EnemyB,
+    _kind = BallMedium,
+    _color = Red
+    }
 
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
@@ -166,7 +185,6 @@ data EnemyObject = EnemyObject {
 
 makeClassy ''EnemyObject
 
-instance HasStateInt EnemyObject where stateInt = chara . stateInt
 instance HasChara EnemyObject where chara = charaEnemy
 instance HasObject EnemyObject where object = chara . object
 
