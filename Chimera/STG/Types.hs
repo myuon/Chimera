@@ -5,10 +5,9 @@ module Chimera.STG.Types where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini (Program, ReifiedProgram, singleton, interpret)
+import Control.Monad.Operational.Mini (Program, ReifiedProgram, interpret)
 import Control.Monad.Operational.TH (makeSingletons)
-import Control.Monad.State.Strict (State, execState, runState)
-import Control.Monad.Trans.Class (lift)
+import Control.Monad.State.Strict (State, runState)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import Data.Default

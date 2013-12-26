@@ -27,24 +27,24 @@ instance Default Keys where
 
 updateKeys :: Keys -> Game Keys
 updateKeys keys = do
-  space' <- keySpecial KeySpace
-  up' <- keySpecial KeyUp
-  down' <- keySpecial KeyDown
-  right' <- keySpecial KeyRight
-  left' <- keySpecial KeyLeft
-  shift' <- keySpecial KeyLeftShift
-  z' <- keyChar 'Z'
-  x' <- keyChar 'X'
+  keySpace <- keySpecial KeySpace
+  keyUp <- keySpecial KeyUp
+  keyDown <- keySpecial KeyDown
+  keyRight <- keySpecial KeyRight
+  keyLeft <- keySpecial KeyLeft
+  keyShift <- keySpecial KeyLeftShift
+  keyZ <- keyChar 'Z'
+  keyX <- keyChar 'X'
   
   return $
-    space %~ keyFun space' $
-    up %~ keyFun up' $
-    down %~ keyFun down' $
-    right %~ keyFun right' $
-    left %~ keyFun left' $
-    shift %~ keyFun shift' $
-    zKey %~ keyFun z' $
-    xKey %~ keyFun x' $
+    space %~ keyFun keySpace $
+    up %~ keyFun keyUp $
+    down %~ keyFun keyDown $
+    right %~ keyFun keyRight $
+    left %~ keyFun keyLeft $
+    shift %~ keyFun keyShift $
+    zKey %~ keyFun keyZ $
+    xKey %~ keyFun keyX $
     keys
 
   where

@@ -1,0 +1,2 @@
+import Chimera
+main = game

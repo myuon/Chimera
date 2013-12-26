@@ -10,7 +10,7 @@ module Chimera.STG.Util (
   , isInside
   , boxVertex, boxVertexRotated
   , cutIntoN
-  , sequence_', mapM_', (><=)
+  , sequence_', mapM_', when_, (><=)
   , rot2D
   , Autonomie(..), autonomie, auto, runAuto, Autonomic
   ) where
@@ -21,17 +21,14 @@ import Control.Monad.State.Strict (MonadState)
 import Data.Default
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
-import Data.Char (toLower)
 
 type Double' = Float
 
-winWidth = 640
-winHeight = 480
-
-areaTop = 16 :: Double'
-areaLeft = 32 :: Double'
-areaBottom = 444 :: Double'
-areaRight = 416 :: Double'
+areaTop, areaLeft, areaBottom, areaRight :: Double'
+areaTop = 16
+areaLeft = 32
+areaBottom = 444
+areaRight = 416
 
 type Vec = V2 Double'
 type Pos = V2 Int
@@ -67,6 +64,9 @@ sequence_' ms = F.foldr (>>) (return ()) ms
 
 mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
 mapM_' f as = sequence_' (fmap f as)
+
+when_ :: (Monad m) => m Bool -> m () -> m ()
+when_ mp m = mp >>= (\b -> when b m)
 
 (><=) :: (MonadState s m) => 
          Setting (->) s s (S.Seq a) (S.Seq a) -> (S.Seq a) -> m ()

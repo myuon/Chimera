@@ -10,6 +10,7 @@ module Chimera.STG.Load (
 import Graphics.UI.FreeGame
 import Control.Lens
 import Data.Default
+import qualified Data.Foldable as F
 import qualified Data.Vector as V
 import System.IO.Unsafe (unsafePerformIO)
 
@@ -53,19 +54,13 @@ execLoad font res = do
   tick
   translate (V2 30 30) . colored white . text (font) 20 $ "読み込み中…"
   tick
-  translate (V2 0 0) $ fromBitmap $ (res^.charaImg) V.! 0
-  translate (V2 0 0) $ fromBitmap $ (res^.charaImg) V.! 1
-  translate (V2 0 0) $ fromBitmap $ (res^.bulletImg) V.! 0 V.! 0
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 1 V.! 0
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 2 V.! 0
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 0
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 1
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 3 V.! 2
-  translate (V2 0 0) $ fromBitmap $ (res^.effectImg) V.! 4 V.! 0
+  F.mapM_ (translate 0 . fromBitmap) (res^.charaImg)
+  F.mapM_ (F.mapM_ (translate 0 . fromBitmap)) (res^.bulletImg)
+  F.mapM_ (F.mapM_ (translate 0 . fromBitmap)) (res^.effectImg)
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
-splitBulletBitmaps img = 
-  V.fromList [V.fromList [clipBulletBitmap (toEnum k) (toEnum c) img
+splitBulletBitmaps pic = 
+  V.fromList [V.fromList [clipBulletBitmap (toEnum k) (toEnum c) pic
                          | c <- [fromEnum Red .. fromEnum Magenta]] 
              | k <- [fromEnum BallLarge .. fromEnum BallTiny]]
 
@@ -82,6 +77,7 @@ clipBulletBitmap b c
   | b == BallFrame  = clip (20 * color c) 110 20 20
   | b == Needle     = clip (5 * color c) 130 5 100
   | b == BallTiny   = clip (40 + 10 * color c) 130 10 10
+  | otherwise = undefined
   where
     color :: BColor -> Int
     color = fromEnum

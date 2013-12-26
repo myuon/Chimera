@@ -16,7 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable Chimera
-  main-is:           Chimera.hs
+  main-is:           Main.hs
   -- other-modules:       
   build-depends:     base >=4.3 && <5
                    , free-game >=0.9 && <1.0

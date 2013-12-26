@@ -11,7 +11,6 @@ import Control.Arrow ((***))
 import Control.Monad.State.Strict
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
-import Control.Monad.Trans.Class (lift)
 
 import Chimera.STG.World as M
 import Chimera.STG.Util
@@ -21,12 +20,9 @@ import Chimera.STG.UI as M
 import Chimera.Scripts
 import Chimera.Scripts.Stage1
 
-import Debug.Trace as T
-
 stage2 :: Stage ()
 stage2 = do
-  res <- getResource
-  keeper $ initEnemy (V2 260 40) 2 res & runAuto .~ debug
+  keeper $ initEnemy (V2 260 40) 2 & runAuto .~ debug
 
 loadStage :: Field -> Field
 loadStage f = f
@@ -77,9 +73,9 @@ instance GUIClass Enemy where
       S.filter (\e -> e^.stateEffect /= Inactive) . fmap (\e -> update `execState` e)
   
   draw res = do
-    e <- get
-    mapM_' (\e -> lift $ draw res `execStateT` e) (e^.effectEnemy)
-    translate (e^.pos) $ fromBitmap (picture res e)
+    c <- get
+    mapM_' (\e -> lift $ draw res `execStateT` e) (c^.effectEnemy)
+    translate (c^.pos) $ fromBitmap (picture res c)
 
 instance GUIClass Bullet where
   update = do
@@ -153,7 +149,7 @@ runAutonomie member = do
   let (s', fs) = scanSeq (f^.member) f
   member .= s'
   f <- get
-  put $ F.foldl (\f u -> u `execState` f) f fs
+  put $ F.foldl (\g u -> u `execState` g) f fs
   
   where
     scanSeq :: (Autonomic a (Danmaku b) b) => 
@@ -171,20 +167,19 @@ addBullet :: State Field ()
 addBullet = do
   p <- use player
   when (p^.keys^.zKey > 0 && p^.counter `mod` 10 == 0) $ do
-    res <- use resource
     bullets ><= (S.fromList
-      [def' res & pos .~ (p^.pos) + V2 5 0,
-       def' res & pos .~ (p^.pos) + V2 15 0,
-       def' res & pos .~ (p^.pos) - V2 5 0,
-       def' res & pos .~ (p^.pos) - V2 15 0])
+      [def' & pos .~ (p^.pos) + V2 5 0,
+       def' & pos .~ (p^.pos) + V2 15 0,
+       def' & pos .~ (p^.pos) - V2 5 0,
+       def' & pos .~ (p^.pos) - V2 15 0])
   
   when (p^.keys^.xKey > 0 && p^.counter `mod` 20 == 0) $ do
     res <- use resource
     bullets ><= (S.singleton $ chaosBomb res (p^.pos))
   
   where
-    def' :: Resource -> Bullet
-    def' res = 
+    def' :: Bullet
+    def' = 
       speed .~ 15 $
       angle .~ pi/2 $ 
       kind .~ Diamond $
@@ -205,7 +200,7 @@ collideObj = do
   player %= (hp -~ n)
   when (n>0) $ effects %= (effPlayerDead res (p^.pos) S.<|)
   
-  let (es', bs'', effs) = run' EnemyB es bs'
+  let (es', bs'', _) = run' EnemyB es bs'
   enemy .= es'
   bullets .= bs''
   -- effects %= (effEnemyDamaged ...)
@@ -224,12 +219,13 @@ collideObj = do
       go _ S.EmptyL bs = (S.empty, bs, S.empty)
       go s (e S.:< es) bs = 
         let (n, bs') = runPair s e bs; (es', bs'', ps) = run eff s es bs' in
-        ((e & hp -~ n) S.<| es, bs'', bool id ((eff s e) S.<|) (n>0) $ ps)
+        ((e & hp -~ n) S.<| es', bs'', bool id ((eff s e) S.<|) (n>0) $ ps)
     
     createEffect :: (HasChara c, HasObject c) => 
                     Resource -> StateBullet -> c -> Effect
     createEffect res PlayerB e = effPlayerDead res (e^.pos)
     createEffect res EnemyB e = effPlayerDead res (e^.pos)
+    createEffect _ _ _ = undefined
 
 collide :: (HasChara c, HasObject c) => c -> Bullet -> Bool
 collide c b = case b^.speed > b^.size^._x of

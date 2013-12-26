@@ -5,28 +5,20 @@ module Chimera.Scripts.Stage1 (
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad
-import Control.Monad.Operational.Mini
-import Control.Monad.State.Strict (get, put, execState, State)
-import Control.Monad.Trans.Class (lift)
-import qualified Data.Vector as V
-import qualified Data.Sequence as S
 
 import Chimera.STG.Util
 import Chimera.STG.World
-import Chimera.STG.Load
 import Chimera.Scripts
+import Chimera.STG.Load
 
 load1 :: Resource
 load1 = def
 
 stage1 :: Stage ()
 stage1 = do
-  res <- getResource
-
-  keeper $ initEnemy (V2 240 (-40)) 2 res & runAuto .~ boss2
-  appearAt 30 $ initEnemy (V2 320 (-40)) 2 res & runAuto .~ zako 20
-  keeper $ initEnemy (V2 240 (-40)) 2 res & runAuto .~ boss1
+  keeper $ initEnemy (V2 240 (-40)) 2 & runAuto .~ boss2
+  appearAt 30 $ initEnemy (V2 320 (-40)) 2 & runAuto .~ zako 20
+  keeper $ initEnemy (V2 240 (-40)) 2 & runAuto .~ boss1
 
 zako :: Int -> Danmaku EnemyObject ()
 zako n
@@ -37,6 +29,7 @@ zako n
     acc :: Int -> Vec
     acc 0 = V2 (-0.05) 0.005
     acc 1 = V2 0.05 0.005
+    acc _ = undefined
 
 boss1 :: Danmaku EnemyObject ()
 boss1 = do
@@ -49,7 +42,6 @@ boss1 = do
             effEnemyAttack 1 res (e^.pos),
             effEnemyAttack 2 res (e^.pos)]
   
-  let go = go' res
   let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ (def :: Bullet)
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [1..4] $ \i ->
@@ -82,8 +74,8 @@ boss1 = do
       def'
 
   where
-    go' :: Resource -> Double' -> Double' -> Danmaku BulletObject ()
-    go' res t1 t2 = liftS $ do
+    go :: Double' -> Double' -> Danmaku BulletObject ()
+    go t1 t2 = liftS $ do
       counter %= (+1)
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
@@ -100,7 +92,6 @@ boss2 = do
   res <- getResource
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
-  let go = go' res
   when (e^.counter == 150) $
     effs $ [effEnemyAttack 0 res (e^.pos),
             effEnemyAttack 1 res (e^.pos),
@@ -124,13 +115,12 @@ boss2 = do
       def
   
   where
-    go' :: Resource -> Int -> Danmaku BulletObject ()
-    go' res n = do
+    go :: Int -> Danmaku BulletObject ()
+    go _ = do
       b <- get'
       let t = pi/(3)
       let time = 50
       when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $ do
-        b <- getLocal
         shots $ return $ def & auto .~ b & angle +~ t
       
       liftS $ do
