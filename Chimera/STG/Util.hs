@@ -70,7 +70,7 @@ when_ mp m = mp >>= (\b -> when b m)
 
 (><=) :: (MonadState s m) => 
          Setting (->) s s (S.Seq a) (S.Seq a) -> (S.Seq a) -> m ()
-a ><= b = a %= (S.><) b
+a ><= b = a %= (S.>< b)
 
 rot2D :: Double' -> M22 Double'
 rot2D r = V2

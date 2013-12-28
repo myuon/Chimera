@@ -9,16 +9,48 @@ import Control.Lens
 import Chimera.STG.Util
 import Chimera.STG.World
 import Chimera.Scripts
-import Chimera.STG.Load
+import Chimera.STG.Load (Resource)
 
 load1 :: Resource
 load1 = def
 
 stage1 :: Stage ()
 stage1 = do
-  keeper $ initEnemy (V2 240 (-40)) 2 & runAuto .~ boss2
-  appearAt 30 $ initEnemy (V2 320 (-40)) 2 & runAuto .~ zako 20
-  keeper $ initEnemy (V2 240 (-40)) 2 & runAuto .~ boss1
+  liftTalk $ do
+    say' $ aline "ルーフェはお母さんからおつかいを頼まれました。"
+    lufe <- character 0 $ V2 500 300
+    say lufe $ 
+      aline "はぁ、面倒くさいな〜。" `click`
+      aline "でもおつかい断るとさらに面倒なことになるしなぁ…。" `click`
+      aline "何でもいいからさっさと終わらせよっと。"
+    say' $ aline "ルーフェは妖精の森を抜けて隣街に向かいます。"
+  
+  appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 370 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 390 (-40)) 10 & runAuto .~ zako 10
+  
+  appearAt 5 $ initEnemy (V2 220 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 200 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 180 (-40)) 10 & runAuto .~ zako 10
+  appearAt 5 $ initEnemy (V2 160 (-40)) 10 & runAuto .~ zako 10
+  
+  wait 350
+  
+  appearAt 5 $ initEnemy (V2 320 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 350 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 370 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 390 (-40)) 5 & runAuto .~ zako 20
+  
+  appearAt 5 $ initEnemy (V2 220 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 200 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 180 (-40)) 5 & runAuto .~ zako 20
+  appearAt 5 $ initEnemy (V2 160 (-40)) 5 & runAuto .~ zako 20
+  
+  wait 20
+  
+  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss2
+  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss1
 
 zako :: Int -> Danmaku EnemyObject ()
 zako n

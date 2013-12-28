@@ -5,9 +5,9 @@ module Chimera.STG.Types where
 
 import Graphics.UI.FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini (Program, ReifiedProgram, interpret)
+import Control.Monad.Operational.Mini (Program, interpret)
 import Control.Monad.Operational.TH (makeSingletons)
-import Control.Monad.State.Strict (State, runState)
+import Control.Monad.State.Strict (State, StateT, runState)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import Data.Default
@@ -19,7 +19,10 @@ data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
   _bulletImg :: V.Vector (V.Vector Bitmap),
   _effectImg :: V.Vector (V.Vector Bitmap),
-  _board :: Bitmap
+  _board :: Bitmap,
+  _font :: Font,
+  _layerBoard :: Bitmap,
+  _portraits :: V.Vector Bitmap
   }
 
 makeLenses ''Resource
@@ -33,15 +36,9 @@ data LookAt p q = LookAt {
 
 makeLenses ''LookAt
 
-data Line c p where
-  GetResourceLine :: Line c Resource
-  Appear :: c -> Line c ()
-  Wait :: Int -> Line c ()
-  Stop :: Line c ()
-
-makeSingletons ''Line
-
-type Line' c = ReifiedProgram (Line c)
+class GUIClass c where
+  update :: State c ()
+  draw :: Resource -> StateT c Game ()
 
 data Pattern p q x where
   GetLocal :: Pattern p q p
@@ -88,16 +85,18 @@ instance Default Object where
     _speed = 0,
     _angle = 0,
     _counter = 0,
-    _size = V2 0 0
+    _size = V2 1 1
     }
 
 data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
+data ZIndex = Background | OnObject | Foreground deriving (Eq, Show)
 
 data EffectObject = EffectObject {
   _objectEffect :: Object,
   _stateEffect :: StateEffect,
   _slowRate :: Int,
-  _img :: Resource -> Bitmap
+  _img :: Resource -> Bitmap,
+  _zIndex :: ZIndex
   }
 
 makeClassy ''EffectObject
@@ -110,7 +109,8 @@ instance Default EffectObject where
     _objectEffect = def, 
     _stateEffect = Active,
     _slowRate = 3,
-    _img = undefined
+    _img = undefined,
+    _zIndex = Background
     }
 
 instance HasEffectObject Effect where effectObject = auto
@@ -195,3 +195,4 @@ instance Default EnemyObject where
       def,
     _effectEnemy = S.empty
     }
+

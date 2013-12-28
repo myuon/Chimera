@@ -1,6 +1,10 @@
+{-# LANGUAGE TemplateHaskell, GADTs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
+{-# LANGUAGE TypeOperators, DataKinds #-}
 module Chimera.Scripts (
-  appearAt, keeper,
-  liftS, getPlayer, shots, effs, globalEffs, get', put'
+  Line(..), Stage, runStage
+  , appearAt, keeper,
+  liftS, getPlayer, shots, effs, globalEffs, get', put', wait
   , initEnemy
   , MotionCommon(..)
   , motionCommon
@@ -8,23 +12,70 @@ module Chimera.Scripts (
   , debug
   , effEnemyDead, effPlayerDead, effEnemyStart, effEnemyAttack
   , chaosBomb
+  , liftTalk, say', character, say
+  , stageTest
+  , module M
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (get, State)
+import Control.Monad.Operational.Mini
+import Data.Monoid ((<>))
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
 
 import Chimera.STG.Util
 import Chimera.STG.World
+import Chimera.Layers as M
+
+data Line p where
+  GetResourceLine :: Line Resource
+  AppearEnemy :: Enemy -> Line ()
+  LiftField :: State Field () -> Line ()
+  GetField :: Line Field
+  Wait :: Int -> Line ()
+  Stop :: Line ()
+  Talk :: Line ()
+  Speak :: Expr -> Line ()
+  Endtalk :: Line ()
+
+type Stage = ReifiedProgram Line
+
+runStage :: Stage () -> State Field (Stage ())
+runStage (GetResourceLine :>>= next) = next `fmap` use resource
+runStage (AppearEnemy e :>>= next) = enemy %= (S.|> e) >> return (next ())
+runStage (Wait n :>>= next) = do
+  case n == 0 of
+    True -> return (next ())
+    False -> return (Wait (n-1) :>>= next)
+runStage u@(Stop :>>= next) = do
+  es <- use enemy
+  case S.length es == 0 of
+    True -> return (next ())
+    False -> return u
+runStage (Talk :>>= next) = stateField .= Talking >> return (next ())
+runStage (LiftField f :>>= next) = f >> return (next ())
+runStage (GetField :>>= next) = next `fmap` get
+runStage u = return u
+
+instance HasGetResource Stage where getResource = singleton GetResourceLine
 
 -- APIs for Stage Monad
+wait :: Int -> Stage ()
+wait = singleton . Wait
+                                    
 appearAt :: Int -> Enemy -> Stage ()
-appearAt n e = wait n >> appear e
+appearAt n e = wait n >> (singleton . AppearEnemy) e
 
 keeper :: Enemy -> Stage ()
-keeper e = appear e >> stop
+keeper e = (singleton . AppearEnemy) e >> (singleton Stop)
+
+addEffect :: Effect -> Stage Int
+addEffect e = do
+  f <- singleton GetField
+  singleton . LiftField $ effects %= (S.|> e)
+  return $ S.length $ f^.effects
 
 -- APIs for Danmaku Monad
 liftS :: State c () -> Danmaku c ()
@@ -123,62 +174,46 @@ debug = do
       color .~ Red $
       def
 
-effEnemyDead :: Resource -> Vec -> Effect
-effEnemyDead res p =
-  pos .~ p $
-  size .~ V2 1 1 $
-  runAuto .~ run $
-  def
+moveSmooth :: (Autonomic c (State a) a, HasObject a, HasObject c) => 
+              Vec -> Int -> c -> c
+moveSmooth v time a = a & runAuto %~ (>> go) where
+  go :: (HasObject c) => State c ()
+  go = do
+    let ang = pi / fromIntegral time
+    c' <- use counter
+    let c = c' - (a^.counter)
+    when (0 <= c && c <= time) $ do
+      let t = ang * (fromIntegral $ c)
+      pos += ((ang * 0.5 * sin t) *^ v)
 
-  where
-    run :: State EffectObject ()
-    run = do
-      f <- get
-      let i = (f^.counter) `div` (f^.slowRate)
-      img .= \r -> (r^.effectImg) V.! 0 V.! i
-      counter %= (+1)
-      when (i == V.length ((res^.effectImg) V.! 0)) $ stateEffect .= Inactive
+effCommonAnimated :: Int -> Resource -> Vec -> Effect
+effCommonAnimated k res p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
+  run :: State EffectObject ()
+  run = do
+    f <- get
+    let i = (f^.counter) `div` (f^.slowRate)
+    img .= \r -> (r^.effectImg) V.! k V.! i
+    counter %= (+1)
+    when (i == V.length ((res^.effectImg) V.! k)) $ stateEffect .= Inactive
+
+effEnemyDead :: Resource -> Vec -> Effect
+effEnemyDead = effCommonAnimated 0
 
 effPlayerDead :: Resource -> Vec -> Effect
-effPlayerDead res p =
-  pos .~ p $
-  size .~ V2 0.8 0.8 $
-  slowRate .~ 5 $
-  runAuto .~ run $
-  def
-
-  where
-    run :: State EffectObject ()
-    run = do
-      f <- get
-      let i = (f^.counter) `div` (f^.slowRate)
-      img .= \r -> (r^.effectImg) V.! 1 V.! i
-      size *= 1.01
-      counter %= (+1)
-      when (i == V.length ((res^.effectImg) V.! 1)) $ stateEffect .= Inactive
+effPlayerDead res = go . effCommonAnimated 1 res where
+  go :: Effect -> Effect
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
 
 effEnemyStart :: Resource -> Vec -> Effect
-effEnemyStart res p =
-  pos .~ p $
-  size .~ V2 0.8 0.8 $
-  slowRate .~ 6 $
-  runAuto .~ run $
-  def
-
-  where
-    run :: State EffectObject ()
-    run = do
-      f <- get
-      let i = (f^.counter) `div` (f^.slowRate)
-      img .= \r -> (r^.effectImg) V.! 2 V.! i
-      size *= 1.01
-      counter %= (+1)
-      when (i == V.length ((res^.effectImg) V.! 2)) $ stateEffect .= Inactive
+effEnemyStart res = go . effCommonAnimated 2 res where 
+  go :: Effect -> Effect
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> size *= 1.01)
     
 effEnemyAttack :: Int -> Resource -> Vec -> Effect
 effEnemyAttack i _ p =
   pos .~ p $
   img .~ (\r -> (r^.effectImg) V.! 3 V.! i) $
+  size .~ 0 $
   runAuto .~ run $
   def
 
@@ -195,7 +230,6 @@ effEnemyAttack i _ p =
     anglePlus 1 = -2/300
     anglePlus 2 = 3/300
     anglePlus _ = undefined
-        
 
 chaosBomb :: Resource -> Vec -> Bullet
 chaosBomb res p =
@@ -226,18 +260,42 @@ chaosBomb res p =
         when (c == 10) $ stateBullet .= Outside
 
     eff :: BulletObject -> Effect
-    eff b = let ratio = (b^.size^._x) / 120 in
-      pos .~ (b^.pos) $
-      size .~ V2 ratio ratio $
-      slowRate .~ 3 $
-      runAuto .~ run' $
-      def
-      
-      where
-        run' :: State EffectObject ()
-        run' = do
-          f <- get
-          let i = (f^.counter) `div` (f^.slowRate)
-          img .= \r -> (r^.effectImg) V.! 4 V.! i
-          counter %= (+1)
-          when (i == V.length ((res^.effectImg) V.! 4)) $ stateEffect .= Inactive
+    eff b = go $ effCommonAnimated 4 res (b^.pos) where
+      go :: Effect -> Effect
+      go e = let ratio = (b^.size^._x) / 120 in
+        e & size .~ V2 ratio ratio & slowRate .~ 3
+
+liftTalk :: Stage () -> Stage ()
+liftTalk m = do
+  singleton $ Talk
+  m
+  singleton $ Endtalk
+  singleton $ LiftField $ effects .= S.empty
+  
+say' :: Expr -> Stage ()
+say' m = singleton . Speak $ m <> ClickWait :+: Empty
+
+character :: Int -> Vec -> Stage Int
+character n p = addEffect $ eff
+  where
+    eff :: Effect
+    eff = def 
+          & pos .~ p
+          & img .~ (\res -> (res^.portraits) V.! n)
+          & zIndex .~ Foreground
+          & runAuto .~ (counter %= (+1))
+
+say :: Int -> Expr -> Stage ()
+say c m = do
+  singleton . LiftField $ effects %= S.adjust (moveSmooth (V2 (-80) 0) 50) c
+  singleton . Speak $ m <> clickend
+  singleton . LiftField $ effects %= S.adjust (moveSmooth (V2 80 0) 50) c
+  
+stageTest :: Stage ()
+stageTest = do
+  liftTalk $ do
+    say' $ msingle $ Text "こんにちは。"
+    lufe <- character 0 $ V2 500 300
+    say lufe $ msingle $ Text "私はルーフェ。"
+    say' $ msingle $ Text "ああああ。"
+  keeper $ initEnemy (V2 260 40) 2 & runAuto .~ debug

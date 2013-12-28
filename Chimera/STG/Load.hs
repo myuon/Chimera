@@ -32,6 +32,10 @@ instance Default Resource where
     p1_0 <- loadBitmapFromFile "data/img/pat1_0.png"
     p1_1 <- loadBitmapFromFile "data/img/pat1_1.png"
     p1_2 <- loadBitmapFromFile "data/img/pat1_2.png"
+    la <- loadBitmapFromFile "data/img/layer_200_w.png"
+    f <- loadFont "data/font/VL-PGothic-Regular.ttf"
+    
+    c1 <- loadBitmapFromFile "data/img/lufe_400.png"
     
     return $ Resource {
       _charaImg = V.fromList [cropBitmap r1 (50,50) (0,0),
@@ -43,7 +47,10 @@ instance Default Resource where
         V.fromList $ cutIntoN 12 e3,
         V.fromList [p1_0, p1_1, p1_2],
         V.fromList $ cutIntoN 14 e4],
-      _board = b
+      _board = b,
+      _font = f,
+      _layerBoard = la,
+      _portraits = V.fromList [c1]
     }
 
 class GetPicture c where
@@ -54,9 +61,9 @@ execLoad font res = do
   tick
   translate (V2 30 30) . colored white . text (font) 20 $ "読み込み中…"
   tick
-  F.mapM_ (translate 0 . fromBitmap) (res^.charaImg)
-  F.mapM_ (F.mapM_ (translate 0 . fromBitmap)) (res^.bulletImg)
-  F.mapM_ (F.mapM_ (translate 0 . fromBitmap)) (res^.effectImg)
+  F.mapM_ (translate (-500) . fromBitmap) (res^.charaImg)
+  F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.bulletImg)
+  F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.effectImg)
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 

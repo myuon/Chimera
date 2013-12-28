@@ -1,9 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts, Rank2Types #-}
-module Chimera.STG (
-  update, draw, loadStage
-
-  , module M
-  ) where
+module Chimera.STG ( module M ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
@@ -13,25 +9,12 @@ import qualified Data.Sequence as S
 import qualified Data.Foldable as F
 
 import Chimera.STG.World as M
-import Chimera.STG.Util
+import Chimera.STG.Util as M
 import Chimera.STG.Load as M
 import Chimera.STG.UI as M
 
-import Chimera.Scripts
-import Chimera.Scripts.Stage1
-
-stage2 :: Stage ()
-stage2 = do
-  keeper $ initEnemy (V2 260 40) 2 & runAuto .~ debug
-
-loadStage :: Field -> Field
-loadStage f = f
-  & stage .~ stage1
-  & resource .~ load1
-
-class GUIClass c where
-  update :: State c ()
-  draw :: Resource -> StateT c Game ()
+import Chimera.Scripts as M
+import Chimera.Scripts.Stage1 as M
 
 instance GUIClass Player where
   update = do
@@ -102,6 +85,7 @@ instance GUIClass Effect where
 instance GUIClass Field where
   update = do
     res <- use resource
+    counterF %= (+1)
   
     -- collision
     collideObj
@@ -112,11 +96,11 @@ instance GUIClass Field where
     
     -- append
     f <- get
-    let (s', LookAt me _) = runStage (f^.stage) `runState` (LookAt Nothing f)
-    stage .= s'
-    counterF %= (+1)
-    enemy %= maybe id (S.<|) me
-    addBullet
+    when_ ((Shooting ==) `fmap` use stateField) $ do
+--      let (s', f') = runStage (f^.stage) `runState` f
+--      put f'
+--      stage .= s'
+      addBullet
     
     -- run
     runAutonomie enemy
@@ -131,10 +115,14 @@ instance GUIClass Field where
   draw _ = do
     f <- get
     res <- use resource
+    
+    let drawEffs z = mapM_' (\e -> lift $ draw res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
+    
+    drawEffs Background
     mapM_' (\p -> lift $ draw res `execStateT` p) (f^.bullets)
     lift $ draw res `execStateT` (f^.player)
     mapM_' (\e -> lift $ draw res `execStateT` e) (f^.enemy)
-    mapM_' (\e -> lift $ draw res `execStateT` e) (f^.effects)
+    drawEffs OnObject
 
     when (f^.isDebug) $ do
       mapM_' (\b -> colored blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
@@ -142,6 +130,7 @@ instance GUIClass Field where
       mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
+    drawEffs Foreground
 
 runAutonomie :: (Autonomic a (Danmaku b) b) => Lens' Field (S.Seq a) -> State Field ()
 runAutonomie member = do
@@ -198,7 +187,7 @@ collideObj = do
   
   let (n, bs') = runPair PlayerB p bs
   player %= (hp -~ n)
-  when (n>0) $ effects %= (effPlayerDead res (p^.pos) S.<|)
+  when (n>0) $ effects %= (S.|> effPlayerDead res (p^.pos))
   
   let (es', bs'', _) = run' EnemyB es bs'
   enemy .= es'
@@ -219,7 +208,7 @@ collideObj = do
       go _ S.EmptyL bs = (S.empty, bs, S.empty)
       go s (e S.:< es) bs = 
         let (n, bs') = runPair s e bs; (es', bs'', ps) = run eff s es bs' in
-        ((e & hp -~ n) S.<| es', bs'', bool id ((eff s e) S.<|) (n>0) $ ps)
+        (es' S.|> (e & hp -~ n), bs'', bool id (S.|> (eff s e)) (n>0) $ ps)
     
     createEffect :: (HasChara c, HasObject c) => 
                     Resource -> StateBullet -> c -> Effect
