@@ -95,7 +95,7 @@ data EffectObject = EffectObject {
   _objectEffect :: Object,
   _stateEffect :: StateEffect,
   _slowRate :: Int,
-  _img :: Resource -> Bitmap,
+  _img :: Resource -> Game (),
   _zIndex :: ZIndex
   }
 

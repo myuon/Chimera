@@ -79,8 +79,7 @@ instance GUIClass Effect where
   
   draw res = do
     b <- get
-    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ 
-      fromBitmap (b^.img $ res)
+    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ lift $ b^.img $ res
 
 instance GUIClass Field where
   update = do

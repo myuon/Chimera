@@ -186,13 +186,29 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
       let t = ang * (fromIntegral $ c)
       pos += ((ang * 0.5 * sin t) *^ v)
 
+effColored :: (Double' -> Color) -> Int -> Effect -> Effect
+effColored f time e = e & runAuto %~ (>> go) where
+  go :: State EffectObject ()
+  go = do
+    c' <- use counter
+    let c = c' - (e^.counter)
+    when (0 <= c && c <= time) $ do
+      let x = fromIntegral c/fromIntegral time
+      img .= (colored (f x) . (e^.img))
+
+effFadeIn :: Int -> Effect -> Effect
+effFadeIn = effColored (\x -> Color 1 1 1 (sin (x*pi/2)))
+
+effFadeOut :: Int -> Effect -> Effect
+effFadeOut = effColored (\x -> Color 1 1 1 (-sin (x*pi/2)))
+
 effCommonAnimated :: Int -> Resource -> Vec -> Effect
 effCommonAnimated k res p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
   run :: State EffectObject ()
   run = do
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)
-    img .= \r -> (r^.effectImg) V.! k V.! i
+    img .= \r -> fromBitmap $ (r^.effectImg) V.! k V.! i
     counter %= (+1)
     when (i == V.length ((res^.effectImg) V.! k)) $ stateEffect .= Inactive
 
@@ -212,7 +228,7 @@ effEnemyStart res = go . effCommonAnimated 2 res where
 effEnemyAttack :: Int -> Resource -> Vec -> Effect
 effEnemyAttack i _ p =
   pos .~ p $
-  img .~ (\r -> (r^.effectImg) V.! 3 V.! i) $
+  img .~ (\r -> fromBitmap $ (r^.effectImg) V.! 3 V.! i) $
   size .~ 0 $
   runAuto .~ run $
   def
@@ -276,12 +292,12 @@ say' :: Expr -> Stage ()
 say' m = singleton . Speak $ m <> ClickWait :+: Empty
 
 character :: Int -> Vec -> Stage Int
-character n p = addEffect $ eff
+character n p = addEffect $ effFadeIn 30 $ eff
   where
     eff :: Effect
     eff = def 
           & pos .~ p
-          & img .~ (\res -> (res^.portraits) V.! n)
+          & img .~ (\res -> fromBitmap $ (res^.portraits) V.! n)
           & zIndex .~ Foreground
           & runAuto .~ (counter %= (+1))
 
