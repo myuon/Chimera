@@ -5,6 +5,7 @@ module Chimera.STG.Load (
   , charaImg, bulletImg, effectImg, board
   , execLoad
   , BKind(..), BColor(..)
+  , makeBullet
   ) where
 
 import Graphics.UI.FreeGame
@@ -91,6 +92,19 @@ clipBulletBitmap b c
 
     clip :: Int -> Int -> Int -> Int -> Bitmap -> Bitmap
     clip a b c d img = cropBitmap img (c,d) (a,b)
+
+areaBullet :: BKind -> Vec
+areaBullet BallLarge = V2 15 15
+areaBullet BallMedium = V2 7 7
+areaBullet BallSmall = V2 4 4
+areaBullet Oval = V2 7 3
+areaBullet Diamond = V2 5 3
+areaBullet BallFrame = V2 5 5
+areaBullet Needle = V2 30 1
+areaBullet BallTiny = V2 2 2
+
+makeBullet :: (HasBulletObject c, HasObject c) => c -> c
+makeBullet b = b & size .~ areaBullet (b^.kind)
 
 instance GetPicture Player where
   picture res _ = (res^.charaImg) V.! 0

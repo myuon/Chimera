@@ -5,11 +5,12 @@ module Chimera.Scripts.Stage1 (
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Control.Monad.State.Strict (modify)
 
 import Chimera.STG.Util
 import Chimera.STG.World
 import Chimera.Scripts
-import Chimera.STG.Load (Resource)
+import Chimera.STG.Load (Resource, makeBullet)
 
 load1 :: Resource
 load1 = def
@@ -74,9 +75,10 @@ boss1 = do
             effEnemyAttack 1 res (e^.pos),
             effEnemyAttack 2 res (e^.pos)]
   
-  let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ (def :: Bullet)
+  let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ def
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [1..4] $ \i ->
+      makeBullet $
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
@@ -84,6 +86,7 @@ boss1 = do
       runAuto %~ (\f -> go 190 300 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
+      makeBullet $
       speed .~ 3 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
@@ -91,6 +94,7 @@ boss1 = do
       runAuto %~ (\f -> go 135 290 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
+      makeBullet $
       speed .~ 2.5 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
@@ -98,6 +102,7 @@ boss1 = do
       runAuto %~ (\f -> go 120 280 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
+      makeBullet $
       speed .~ 2.2 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
@@ -116,6 +121,7 @@ boss1 = do
       when (cnt == 170) $ do
         kind .= BallTiny
         color .= Purple
+        modify makeBullet
   
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
@@ -131,6 +137,7 @@ boss2 = do
   
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [0..5] $ \i ->
+      makeBullet $
       pos .~ e^.pos $
       speed .~ 2 $
       angle .~ ang + fromIntegral i*2*pi/5 $
@@ -139,6 +146,7 @@ boss2 = do
       def
   when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
     shots $ return $
+      makeBullet $
       pos .~ e^.pos $
       speed .~ 1.5 $
       angle .~ ang $

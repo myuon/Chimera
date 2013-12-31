@@ -70,8 +70,11 @@ instance GUIClass Bullet where
 
   draw res = do
     b <- get
-    translate (b^.pos) $ rotateR (b^.angle + pi/2) $ fromBitmap (picture res b)
-
+    let p = fromBitmap (picture res b)
+    case b^.size^._x /= b^.size^._y of
+      True -> translate (b^.pos) $ rotateR (b^.angle + pi/2) $ p
+      False -> translate (b^.pos) $ p
+      
 instance GUIClass Effect where
   update = do
     run <- use runAuto
@@ -168,6 +171,7 @@ addBullet = do
   where
     def' :: Bullet
     def' = 
+      makeBullet $
       speed .~ 15 $
       angle .~ pi/2 $ 
       kind .~ Diamond $
@@ -216,15 +220,17 @@ collideObj = do
     createEffect _ _ _ = undefined
 
 collide :: (HasChara c, HasObject c) => c -> Bullet -> Bool
-collide c b = case b^.speed > b^.size^._x of
-  True -> detect (b & size +~ fromPolar (b^.speed, b^.angle)) c
-  False -> detect b c
+collide c b = case b^.speed > b^.size^._x || b^.speed > b^.size^._y of
+  True -> let b' = (b & size +~ fromPolar (b^.speed, -b^.angle))
+          in detect b' c || detect c b'
+  False -> detect b c || detect c b
   where
     detect :: (HasObject c, HasObject c') => c -> c' -> Bool
     detect a b = 
       let V2 w' h' = a^.size
           r = rot2D (a^.angle) in
-      or $ [(a^.pos + r !* (V2   w'    h' )) `isIn` b,
+      or $ [(a^.pos) `isIn` b,
+            (a^.pos + r !* (V2   w'    h' )) `isIn` b,
             (a^.pos + r !* (V2 (-w')   h' )) `isIn` b,
             (a^.pos + r !* (V2   w'  (-h'))) `isIn` b,
             (a^.pos + r !* (V2 (-w') (-h'))) `isIn` b]

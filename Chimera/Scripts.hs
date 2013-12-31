@@ -28,6 +28,7 @@ import qualified Data.Sequence as S
 import Chimera.STG.Util
 import Chimera.STG.World
 import Chimera.Layers as M
+import Chimera.STG.Load (makeBullet)
 
 data Line p where
   GetResourceLine :: Line Resource
@@ -151,8 +152,9 @@ zakoCommon _ mot time bk c = do
 
   when ((e^.counter) `mod` time == 0 && e^.stateChara == Attack) $
     shots $ return $
+      makeBullet $
       pos .~ (e^.pos) $ 
-      speed .~ 3 $
+      speed .~ 2 $
       angle .~ ang $
       kind .~ bk $
       color .~ c $
@@ -167,6 +169,7 @@ debug = do
 
   when (cnt `mod` 4 == 0 && e ^. spXY == 0) $
     shots $ (flip map) [1..n] $ \i ->
+      makeBullet $
       pos .~ (e^.pos) $ 
       speed .~ 0.5 $
       angle .~ i*2*pi/n + (fromIntegral cnt)/100 $
@@ -309,9 +312,12 @@ say c m = do
   
 stageTest :: Stage ()
 stageTest = do
-  liftTalk $ do
-    say' $ msingle $ Text "こんにちは。"
-    lufe <- character 0 $ V2 500 300
-    say lufe $ msingle $ Text "私はルーフェ。"
-    say' $ msingle $ Text "ああああ。"
-  keeper $ initEnemy (V2 260 40) 2 & runAuto .~ debug
+  let e r = keeper $ initEnemy (V2 320 (-40)) 10 & runAuto .~ r
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallLarge Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallMedium Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallSmall Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 Oval Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 Diamond Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallFrame Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 Needle Red
+  e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallTiny Red

@@ -107,7 +107,7 @@ talkloop = do
 
 game :: IO (Maybe a)
 game = runGame start $ do
-  let field' = def & resource .~ def
+  let field' = def & resource .~ def & isDebug .~ False
   
   let its = V.fromList [Item "Game Start" loadloop,
                         Item "Quit" quit]
@@ -116,7 +116,7 @@ game = runGame start $ do
                       _field = field',
                       _menu = def & items .~ its,
                       _mEngine = def,
-                      _stage = stage1,
+                      _stage = stageTest,
                       _running = menuloop }) $ foreverTick $ do
     go <- use running
     go
