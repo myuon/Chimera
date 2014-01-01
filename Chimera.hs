@@ -9,9 +9,8 @@ import Data.Maybe (fromJust, isJust)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
 
-import Chimera.STG
+import Chimera.Engine
 import Chimera.Menu
-import Chimera.Layers
 
 makeLenses ''GUIParam
 

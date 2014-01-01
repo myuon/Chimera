@@ -13,8 +13,8 @@ import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
 import Control.Monad.State.Strict
 
-import Chimera.STG.Types
-import Chimera.STG.Util
+import Chimera.Core.Types
+import Chimera.Core.Util
 
 data Layer = Layer {
   _posLayer :: Vec,

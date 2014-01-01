@@ -7,10 +7,8 @@ import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (modify)
 
-import Chimera.STG.Util
-import Chimera.STG.World
+import Chimera.Core.World
 import Chimera.Scripts
-import Chimera.STG.Load (Resource, makeBullet)
 
 load1 :: Resource
 load1 = def

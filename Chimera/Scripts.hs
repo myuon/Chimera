@@ -25,10 +25,8 @@ import Data.Monoid ((<>))
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
 
-import Chimera.STG.Util
-import Chimera.STG.World
+import Chimera.Core.World
 import Chimera.Layers as M
-import Chimera.STG.Load (makeBullet)
 
 data Line p where
   GetResourceLine :: Line Resource
@@ -279,7 +277,7 @@ chaosBomb res p =
         when (c == 10) $ stateBullet .= Outside
 
     eff :: BulletObject -> Effect
-    eff b = go $ effCommonAnimated 4 res (b^.pos) where
+    eff b = go $ zIndex .~ Background $ effCommonAnimated 4 res (b^.pos) where
       go :: Effect -> Effect
       go e = let ratio = (b^.size^._x) / 120 in
         e & size .~ V2 ratio ratio & slowRate .~ 3

@@ -7,7 +7,7 @@ import Data.Default
 import Control.Monad.State.Strict
 import qualified Data.Vector as V
 
-import Chimera.STG.Util
+import Chimera.Core.Util
 
 data Item m = Item {
   _caption :: String,

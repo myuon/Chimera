@@ -1,11 +1,11 @@
 {-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
-module Chimera.STG.Load (
+module Chimera.Core.Load (
   Resource(..)
   , GetPicture, picture
   , charaImg, bulletImg, effectImg, board
   , execLoad
   , BKind(..), BColor(..)
-  , makeBullet
+  , areaBullet, getBulletBitmap
   ) where
 
 import Graphics.UI.FreeGame
@@ -15,9 +15,8 @@ import qualified Data.Foldable as F
 import qualified Data.Vector as V
 import System.IO.Unsafe (unsafePerformIO)
 
-import Chimera.STG.Util
-import Chimera.STG.Types
-import Chimera.STG.World
+import Chimera.Core.Util
+import Chimera.Core.Types
 
 -- *unsafe*
 instance Default Resource where
@@ -102,16 +101,4 @@ areaBullet Diamond = V2 5 3
 areaBullet BallFrame = V2 5 5
 areaBullet Needle = V2 30 1
 areaBullet BallTiny = V2 2 2
-
-makeBullet :: (HasBulletObject c, HasObject c) => c -> c
-makeBullet b = b & size .~ areaBullet (b^.kind)
-
-instance GetPicture Player where
-  picture res _ = (res^.charaImg) V.! 0
-
-instance GetPicture Enemy where
-  picture res _ = (res^.charaImg) V.! 1
-
-instance GetPicture Bullet where
-  picture res b = getBulletBitmap (res^.bulletImg) (b^.kind) (b^.color)
 

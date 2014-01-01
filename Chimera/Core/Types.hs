@@ -1,20 +1,51 @@
-{-# LANGUAGE TemplateHaskell, GADTs, TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies, UndecidableInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-module Chimera.STG.Types where
+{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, FunctionalDependencies  #-}
+{-# LANGUAGE FlexibleInstances, GADTs, FlexibleContexts, RankNTypes #-}
+module Chimera.Core.Types where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, interpret)
 import Control.Monad.Operational.TH (makeSingletons)
-import Control.Monad.State.Strict (State, StateT, runState)
+import Control.Monad.State.Strict (State, StateT, execState, runState, get, put)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
+import qualified Data.Foldable as F
 import Data.Default
 
-import Chimera.STG.Util
-import qualified Chimera.STG.UI as UI
+import Chimera.Core.Util
 
+data Autonomie m a = Autonomie {
+  _auto :: a,
+  _runAuto :: m ()
+  }
+
+makeLensesFor [("_auto", "__auto"),
+               ("_runAuto", "__runAuto")] ''Autonomie
+
+instance (Monad m, Default a) => Default (Autonomie m a) where
+  def = Autonomie {
+    _auto = def,
+    _runAuto = return ()
+    }
+
+class Autonomic c m a | c -> a, c -> m where
+  autonomie :: Lens' c (Autonomie m a)
+
+instance Autonomic (Autonomie m a) m a where
+  autonomie = id
+
+auto :: (Autonomic c m a) => Lens' c a
+auto = autonomie . __auto
+
+runAuto :: (Autonomic c m a) => Lens' c (m ())
+runAuto = autonomie . __runAuto
+
+instance (Eq a) => Eq (Autonomie m a) where
+  a == b = a^.auto == b^.auto
+
+instance (Show a) => Show (Autonomie m a) where
+  show a = show $ a^.auto
+  
 data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
   _bulletImg :: V.Vector (V.Vector Bitmap),
@@ -91,6 +122,32 @@ instance Default Object where
 data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
 data ZIndex = Background | OnObject | Foreground deriving (Eq, Show)
 
+data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
+
+data Chara = Chara {
+  _objectChara :: Object,
+  _stateChara :: StateChara,
+  _hp :: Int
+  }
+
+makeClassy ''Chara
+
+instance HasObject Chara where object = objectChara
+instance Default Chara where
+  def = Chara { 
+    _objectChara = def,
+    _stateChara = Alive,
+    _hp = 0
+    }
+
+data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+data BKind = BallLarge | BallMedium | BallSmall | 
+             Oval | Diamond | Needle | BallFrame | BallTiny
+  deriving (Eq, Ord, Enum, Show)
+
+data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+  deriving (Eq, Ord, Enum, Show)
+
 data EffectObject = EffectObject {
   _objectEffect :: Object,
   _stateEffect :: StateEffect,
@@ -115,49 +172,6 @@ instance Default EffectObject where
 
 instance HasEffectObject Effect where effectObject = auto
 instance HasObject Effect where object = auto . objectEffect
-
-data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
-
-data Chara = Chara {
-  _objectChara :: Object,
-  _stateChara :: StateChara,
-  _hp :: Int,
-  _charaEffects :: S.Seq Effect
-  }
-
-makeClassy ''Chara
-
-instance HasObject Chara where object = objectChara
-instance Default Chara where def = Chara def Alive 0 S.empty
-
-data Player = Player {
-  _charaPlayer :: Chara,
-  _keys :: UI.Keys
-  }
-
-makeLenses ''Player
-
-instance HasChara Player where chara = charaPlayer
-instance HasObject Player where object = chara . object
-
-instance Default Player where
-  def = Player {
-    _charaPlayer =
-      pos .~ V2 320 420 $ 
-      speed .~ 2.5 $
-      size .~ V2 5 5 $
-      hp .~ 10 $
-      def,
-    _keys = def
-    }
-
-data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
-data BKind = BallLarge | BallMedium | BallSmall | 
-             Oval | Diamond | Needle | BallFrame | BallTiny
-  deriving (Eq, Ord, Enum, Show)
-
-data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
-  deriving (Eq, Ord, Enum, Show)
 
 data BulletObject = BulletObject {
   _objectBullet :: Object,
@@ -195,4 +209,40 @@ instance Default EnemyObject where
       def,
     _effectEnemy = S.empty
     }
+
+runLookAt :: Lens' f (S.Seq a) -> (f -> a -> (a, S.Seq (State f ()))) -> State f ()
+runLookAt member go = do
+  f <- get
+  (s', fs) <- scanSeq (go f) `fmap` use member
+  member .= s'
+  f <- get
+  put $ F.foldl (\g u -> u `execState` g) f fs
+  
+  where
+    scanSeq :: (a -> (a, S.Seq b)) -> S.Seq a -> (S.Seq a, S.Seq b)
+    scanSeq f es = let pairs = fmap f es in 
+      (fmap fst pairs, (F.foldl (S.><) S.empty $ fmap snd pairs))
+
+collide :: (HasObject c, HasObject b) => c -> b -> Bool
+collide c b = case b^.speed > b^.size^._x || b^.speed > b^.size^._y of
+  True -> let b' = (b & size +~ fromPolar (b^.speed, -b^.angle))
+          in detect b' c || detect c b'
+  False -> detect b c || detect c b
+  where
+    detect :: (HasObject c, HasObject c') => c -> c' -> Bool
+    detect a b = 
+      let V2 w' h' = a^.size
+          r = rot2D (a^.angle) in
+      or $ [(a^.pos) `isIn` b,
+            (a^.pos + r !* (V2   w'    h' )) `isIn` b,
+            (a^.pos + r !* (V2 (-w')   h' )) `isIn` b,
+            (a^.pos + r !* (V2   w'  (-h'))) `isIn` b,
+            (a^.pos + r !* (V2 (-w') (-h'))) `isIn` b]
+    
+    isIn :: (HasObject c) => Vec -> c -> Bool
+    isIn p box = isInCentoredBox (p-box^.pos) where
+      isInCentoredBox :: Vec -> Bool
+      isInCentoredBox p' = 
+        let V2 px' py' = rot2D (-box^.angle) !* p' in
+        abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 

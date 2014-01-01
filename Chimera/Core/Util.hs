@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
-module Chimera.STG.Util (
+module Chimera.Core.Util (
   Double'
   , V2, Vec, Pos
   , fromPair, toPair
@@ -12,13 +12,13 @@ module Chimera.STG.Util (
   , cutIntoN
   , sequence_', mapM_', when_, (><=)
   , rot2D
-  , Autonomie(..), autonomie, auto, runAuto, Autonomic
+  , clamp
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
+import Control.Arrow ((***))
 import Control.Monad.State.Strict (MonadState)
-import Data.Default
 import qualified Data.Sequence as S
 import qualified Data.Foldable as F
 
@@ -77,35 +77,12 @@ rot2D r = V2
           (V2 (cos(-r)) (-sin(-r)))
           (V2 (sin(-r)) (cos(-r)))
 
-data Autonomie m a = Autonomie {
-  _auto :: a,
-  _runAuto :: m ()
-  }
+clamp :: Vec -> Vec
+clamp = fromPair . (edgeX *** edgeY) . toPair
+  where
+    edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaRight (p > areaRight))
+    
+    edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaBottom (p > areaBottom))
 
-makeLensesFor [("_auto", "__auto"),
-               ("_runAuto", "__runAuto")] ''Autonomie
-
-instance (Monad m, Default a) => Default (Autonomie m a) where
-  def = Autonomie {
-    _auto = def,
-    _runAuto = return ()
-    }
-
-class Autonomic c m a | c -> a, c -> m where
-  autonomie :: Lens' c (Autonomie m a)
-
-instance Autonomic (Autonomie m a) m a where
-  autonomie = id
-
-auto :: forall c m a. (Autonomic c m a) => Lens' c a
-auto = autonomie . __auto
-
-runAuto :: forall c m a. (Autonomic c m a) => Lens' c (m ())
-runAuto = autonomie . __runAuto
-
-instance (Eq a) => Eq (Autonomie m a) where
-  a == b = a^.auto == b^.auto
-
-instance (Show a) => Show (Autonomie m a) where
-  show a = show $ a^.auto
-  

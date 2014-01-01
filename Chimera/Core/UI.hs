@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.STG.UI (
+module Chimera.Core.UI (
   Keys(..)
   , space, up, down, right, left, zKey, xKey, shift
   , updateKeys
