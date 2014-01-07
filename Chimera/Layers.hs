@@ -4,13 +4,14 @@ module Chimera.Layers (
   , StateEngine(..), MessageEngine
   , Token(..), Expr(..), msingle
   , click, clickend, aline
-  , message, cursor, stateEngine, typingTime, layer
+  , message, printing, cursor, stateEngine, typingTime, layer
   ) where
 
 import Graphics.UI.FreeGame
 import Control.Lens
 import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
+import Data.List (unfoldr)
 import Control.Monad.State.Strict
 
 import Chimera.Core.Types
@@ -68,7 +69,8 @@ data MessageEngine = MessageEngine {
   _cursor :: Int,
   _stateEngine :: StateEngine,
   _typingTime :: Int,
-  _layerMessageEngine :: Layer
+  _layerMessageEngine :: Layer,
+  _counterEngine :: Int
   }
 
 makeLenses ''MessageEngine
@@ -80,16 +82,26 @@ instance Default MessageEngine where
     _cursor = 0,
     _stateEngine = End,
     _typingTime = 3,
-    _layerMessageEngine = def
+    _layerMessageEngine = def,
+    _counterEngine = 0
     }
 
 instance HasLayer MessageEngine where layer = layerMessageEngine
 
 runToken :: Token -> State MessageEngine ()
 runToken (Text u) = do
+  la <- use layerMessageEngine
   cursor .= 0
-  printing .= u
+  printing .= overflow u (la^.sizeLayer)
   stateEngine .= Printing
+  
+  where
+    overflow :: String -> Vec -> String
+    overflow s (V2 w _) = foldr (\x y -> x ++ ('\n' : y)) "" $ unfoldr go s where
+      go :: String -> Maybe (String, String)
+      go [] = Nothing
+      go t = Just . splitAt (truncate $ w/20) $ t
+
 runToken (ClickWait) = stateEngine .= Waiting
 
 runExpr :: Expr -> State MessageEngine ()
@@ -105,18 +117,19 @@ instance GUIClass MessageEngine where
       m <- use message
       runExpr m
     when_ ((== Printing) `fmap` use stateEngine) $ do
-      cursor %= (+1)
-      m <- use printing
+      counterEngine %= (+1)
       t <- use typingTime
-      when_ ((== t * length m) `fmap` use cursor) $ stateEngine .= Parsing
+      c <- use counterEngine
+      when (c `mod` t == 0) $ cursor %= (+1)
+      m <- use printing
+      when_ ((== length m) `fmap` use cursor) $ stateEngine .= Parsing
     
   draw res = do
     la <- use layer
     lift $ draw res `execStateT` la
     c <- use cursor
     m <- use printing
-    t <- use typingTime
-    translate (topleft la) . colored black . text (res^.font) 20 $ take (c `div` t) m
+    translate (topleft la) . colored black . text (res^.font) 20 $ take c m
 
     where
       topleft :: Layer -> Vec

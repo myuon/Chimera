@@ -11,6 +11,7 @@ import qualified Data.Sequence as S
 
 import Chimera.Engine
 import Chimera.Menu
+import Chimera.Scripts.Stage1
 
 makeLenses ''GUIParam
 
@@ -52,7 +53,7 @@ loadloop = do
 stgloop :: GameLoop ()
 stgloop = do
   gf <- get
-
+  
   lift $ draw undefined `execStateT` (gf ^. field)
   
   font' <- use (field.resource.font)
@@ -87,8 +88,13 @@ talkloop = do
     put g'
     stage .= s'
   when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ 
-    when_ (keyChar 'Z') $ 
-    mEngine.stateEngine .= Parsing
+    when_ (keyChar 'Z') $ mEngine.stateEngine .= Parsing
+  when_ (keySpecial KeyLeftControl) $ do
+    when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ do
+      mEngine.stateEngine .= Parsing
+    when_ ((== Printing) `fmap` use (mEngine.stateEngine)) $ do
+      p <- use (mEngine.printing)
+      mEngine.cursor .= (length p - 1)
   
   where
     runTalk :: Stage () -> State GameFrame (Stage ())
@@ -115,7 +121,7 @@ game = runGame start $ do
                       _field = field',
                       _menu = def & items .~ its,
                       _mEngine = def,
-                      _stage = stageTest,
+                      _stage = stage1,
                       _running = menuloop }) $ foreverTick $ do
     go <- use running
     go

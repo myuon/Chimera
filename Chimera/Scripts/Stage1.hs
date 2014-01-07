@@ -22,8 +22,16 @@ stage1 = do
       aline "はぁ、面倒くさいな〜。" `click`
       aline "でもおつかい断るとさらに面倒なことになるしなぁ…。" `click`
       aline "何でもいいからさっさと終わらせよっと。"
+    delCharacter lufe
     say' $ aline "ルーフェは妖精の森を抜けて隣街に向かいます。"
   
+    say' $ 
+      aline "このChimeraというゲームは全てHaskellという言語で書かれています。" `click`
+      aline "そして使っているのはOpenGLをバックエンドにもつfree-gameライブラリです。" `click`
+      aline "free-gameの名前の由来にもなっているFreeモナドは、functorから最低限の構造をもったMonadを創りだすことができる道具です。" `click`
+      aline "これによってChimeraではGameができStageが記述されDanmakuを形作っているのです。" `click`
+      aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
+    
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 370 (-40)) 10 & runAuto .~ zako 10

@@ -12,7 +12,7 @@ module Chimera.Scripts (
   , debug
   , effEnemyDead, effPlayerDead, effEnemyStart, effEnemyAttack
   , chaosBomb
-  , liftTalk, say', character, say
+  , liftTalk, say', character, say, delCharacter
   , stageTest
   , module M
   ) where
@@ -27,6 +27,8 @@ import qualified Data.Sequence as S
 
 import Chimera.Core.World
 import Chimera.Layers as M
+
+import Debug.Trace as T
 
 data Line p where
   GetResourceLine :: Line Resource
@@ -61,6 +63,9 @@ runStage u = return u
 instance HasGetResource Stage where getResource = singleton GetResourceLine
 
 -- APIs for Stage Monad
+liftField :: State Field () -> Stage ()
+liftField = singleton . LiftField
+
 wait :: Int -> Stage ()
 wait = singleton . Wait
                                     
@@ -187,21 +192,23 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
       let t = ang * (fromIntegral $ c)
       pos += ((ang * 0.5 * sin t) *^ v)
 
-effColored :: (Double' -> Color) -> Int -> Effect -> Effect
-effColored f time e = e & runAuto %~ (>> go) where
+effColored :: (Double' -> Color) -> State EffectObject () -> Int -> Effect -> Effect
+effColored f g time e = e & runAuto %~ (>> go) where
   go :: State EffectObject ()
   go = do
-    c' <- use counter
-    let c = c' - (e^.counter)
+    c1 <- use counter
+    let c = c1 - (e^.counter)
     when (0 <= c && c <= time) $ do
       let x = fromIntegral c/fromIntegral time
-      img .= (colored (f x) . (e^.img))
+      img .= (colored (f x) . (e^.img)) 
+    when (c == time) $ g
 
 effFadeIn :: Int -> Effect -> Effect
-effFadeIn = effColored (\x -> Color 1 1 1 (sin (x*pi/2)))
+effFadeIn n e = effColored (\x -> Color 1 1 1 (sin (x*pi/2))) (img .= (e^.img)) n e
 
 effFadeOut :: Int -> Effect -> Effect
-effFadeOut = effColored (\x -> Color 1 1 1 (-sin (x*pi/2)))
+effFadeOut n e = effColored (\x -> Color 1 1 1 (cos (x*pi/2)))
+                 (img .= (colored (Color 1 1 1 0) . (e^.img))) n e
 
 effCommonAnimated :: Int -> Resource -> Vec -> Effect
 effCommonAnimated k res p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
@@ -287,26 +294,28 @@ liftTalk m = do
   singleton $ Talk
   m
   singleton $ Endtalk
-  singleton $ LiftField $ effects .= S.empty
+  liftField $ effects .= S.empty
   
 say' :: Expr -> Stage ()
-say' m = singleton . Speak $ m <> ClickWait :+: Empty
+say' m = singleton . Speak $ m <> clickend
 
 character :: Int -> Vec -> Stage Int
-character n p = addEffect $ effFadeIn 30 $ eff
-  where
-    eff :: Effect
-    eff = def 
-          & pos .~ p
-          & img .~ (\res -> fromBitmap $ (res^.portraits) V.! n)
-          & zIndex .~ Foreground
-          & runAuto .~ (counter %= (+1))
+character n p = addEffect $ effFadeIn 30 $ eff where
+  eff :: Effect
+  eff = def 
+        & pos .~ p
+        & img .~ (\res -> fromBitmap $ (res^.portraits) V.! n)
+        & zIndex .~ Foreground
+        & runAuto .~ (counter %= (+1))
+
+delCharacter :: Int -> Stage ()
+delCharacter c = liftField $ effects %= S.adjust (effFadeOut 30) c
 
 say :: Int -> Expr -> Stage ()
 say c m = do
-  singleton . LiftField $ effects %= S.adjust (moveSmooth (V2 (-80) 0) 50) c
+  liftField $ effects %= S.adjust (moveSmooth (V2 (-80) 0) 50) c
   singleton . Speak $ m <> clickend
-  singleton . LiftField $ effects %= S.adjust (moveSmooth (V2 80 0) 50) c
+  liftField $ effects %= S.adjust (moveSmooth (V2 80 0) 50) c
   
 stageTest :: Stage ()
 stageTest = do
