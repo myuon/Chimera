@@ -58,9 +58,6 @@ class GetPicture c where
 
 execLoad :: Font -> Resource -> Game ()
 execLoad font res = do
-  tick
-  translate (V2 30 30) . colored white . text (font) 20 $ "読み込み中…"
-  tick
   F.mapM_ (translate (-500) . fromBitmap) (res^.charaImg)
   F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.bulletImg)
   F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.effectImg)

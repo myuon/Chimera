@@ -8,6 +8,7 @@ import Control.Monad.Operational.Mini
 import Data.Maybe (fromJust, isJust)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
+import Control.Concurrent
 
 import Chimera.Engine
 import Chimera.Menu
@@ -47,8 +48,19 @@ loadloop :: GameLoop ()
 loadloop = do
   font' <- use (field.resource.font)
   field' <- use field
+  w <- embedIO $ forkIO $ waiting 0
+    
   lift $ execLoad font' (field'^.resource)
+  embedIO $ killThread w
+
   running .= stgloop
+  where
+    waiting :: Int -> IO ()
+    waiting n = do
+      putStrLn $ "Loading.." ++ replicate n '.'
+--      translate (V2 30 30) . colored white . text (font') 20 $ "読み込み中…"
+      threadDelay 1000000
+      waiting (n+1)
 
 stgloop :: GameLoop ()
 stgloop = do
