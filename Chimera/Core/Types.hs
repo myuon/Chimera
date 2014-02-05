@@ -53,7 +53,8 @@ data Resource = Resource {
   _board :: Bitmap,
   _font :: Font,
   _layerBoard :: Bitmap,
-  _portraits :: V.Vector Bitmap
+  _portraits :: V.Vector Bitmap,
+  _numbers :: V.Vector Bitmap
   }
 
 makeLenses ''Resource

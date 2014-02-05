@@ -50,17 +50,21 @@ instance Default Resource where
       _board = b,
       _font = f,
       _layerBoard = la,
-      _portraits = V.fromList [c1]
+      _portraits = V.fromList [c1],
+      _numbers = undefined
     }
 
 class GetPicture c where
   picture :: Resource -> c -> Bitmap
 
-execLoad :: Font -> Resource -> Game ()
-execLoad font res = do
+execLoad :: Resource -> Game Resource
+execLoad res = do
   F.mapM_ (translate (-500) . fromBitmap) (res^.charaImg)
   F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.bulletImg)
   F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.effectImg)
+  ns <- mapM (fmap charBitmap . charToBitmap (res^.font) 20) "0123456789"
+  return $ res
+    & numbers .~ V.fromList ns
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 

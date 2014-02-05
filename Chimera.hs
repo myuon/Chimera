@@ -28,8 +28,8 @@ data GameFrame = GameFrame {
 
 makeLenses ''GameFrame
 
-start :: GUIParam
-start =
+window :: GUIParam
+window =
   windowRegion .~ BoundingBox 0 0 640 480 $
   framePerSecond .~ 60 $
   windowTitle .~ "Chimera" $
@@ -46,11 +46,8 @@ menuloop = do
 
 loadloop :: GameLoop ()
 loadloop = do
-  font' <- use (field.resource.font)
-  field' <- use field
   w <- embedIO $ forkIO $ waiting 0
-    
-  lift $ execLoad font' (field'^.resource)
+  field.resource <~ (lift . execLoad =<< use (field.resource))
   embedIO $ killThread w
 
   running .= stgloop
@@ -123,7 +120,7 @@ talkloop = do
     runTalk u = return u
 
 game :: IO (Maybe a)
-game = runGame start $ do
+game = runGame window $ do
   let field' = def & resource .~ def & isDebug .~ False
   
   let its = V.fromList [Item "Game Start" loadloop,

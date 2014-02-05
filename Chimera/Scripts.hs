@@ -28,8 +28,6 @@ import qualified Data.Sequence as S
 import Chimera.Core.World
 import Chimera.Layers as M
 
-import Debug.Trace as T
-
 data Line p where
   GetResourceLine :: Line Resource
   AppearEnemy :: Enemy -> Line ()

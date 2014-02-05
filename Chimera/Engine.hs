@@ -3,7 +3,9 @@ module Chimera.Engine ( module M ) where
 import Graphics.UI.FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (get, lift, execStateT, execState, State)
+import Data.Char (digitToInt)
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 
 import Chimera.Core.Load as M
 import Chimera.Core.World as M
@@ -43,8 +45,9 @@ instance GUIClass Field where
     let drawEffs z = mapM_' (\e -> lift $ draw res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
     
     drawEffs Background
-    mapM_' (\p -> lift $ draw res `execStateT` p) (f^.bullets)
+    
     lift $ draw res `execStateT` (f^.player)
+    mapM_' (\p -> lift $ draw res `execStateT` p) (f^.bullets)
     mapM_' (\e -> lift $ draw res `execStateT` e) (f^.enemy)
     drawEffs OnObject
 
@@ -54,6 +57,9 @@ instance GUIClass Field where
       mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ fromBitmap (f^.resource^.board)
+    let score = f^.counterF
+    flip mapM (zip (show score) [1..]) $ \(n, i) -> 
+      translate (V2 (430 + i*13) 30) $ fromBitmap $ (f^.resource^.numbers) V.! (digitToInt n)
     drawEffs Foreground
     
 collideObj :: State Field ()
