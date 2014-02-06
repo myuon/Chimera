@@ -3,8 +3,8 @@
 {-# LANGUAGE TypeOperators, DataKinds #-}
 module Chimera.Scripts (
   Line(..), Stage, runStage
-  , appearAt, keeper,
-  liftS, getPlayer, shots, effs, globalEffs, get', put', wait
+  , appearAt, keeper
+  , liftS, getPlayer, shots, effs, globalEffs, get', put', wait
   , initEnemy
   , MotionCommon(..)
   , motionCommon
@@ -17,11 +17,12 @@ module Chimera.Scripts (
   , module M
   ) where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (get, State)
 import Control.Monad.Operational.Mini
 import Data.Monoid ((<>))
+import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
 
@@ -101,13 +102,13 @@ get' = getLocal
 put' :: c -> Danmaku c ()
 put' = putLocal
 
-initEnemy :: Vec -> Int -> Enemy
+initEnemy :: Vec2 -> Int -> Enemy
 initEnemy p h =
   pos .~ p $
   hp .~ h $
   def
 
-data MotionCommon = Straight | Affine Vec | Curve Vec | Stay
+data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
 motionCommon :: Int -> MotionCommon -> State EnemyObject ()
 motionCommon time (Straight) = do
@@ -158,7 +159,7 @@ zakoCommon _ mot time bk c = do
       speed .~ 2 $
       angle .~ ang $
       kind .~ bk $
-      color .~ c $
+      bcolor .~ c $
       def
 
 debug :: Danmaku EnemyObject ()
@@ -175,11 +176,11 @@ debug = do
       speed .~ 0.5 $
       angle .~ i*2*pi/n + (fromIntegral cnt)/100 $
       kind .~ BallTiny $
-      color .~ Red $
+      bcolor .~ Red $
       def
 
 moveSmooth :: (Autonomic c (State a) a, HasObject a, HasObject c) => 
-              Vec -> Int -> c -> c
+              Vec2 -> Int -> c -> c
 moveSmooth v time a = a & runAuto %~ (>> go) where
   go :: (HasObject c) => State c ()
   go = do
@@ -190,7 +191,7 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
       let t = ang * (fromIntegral $ c)
       pos += ((ang * 0.5 * sin t) *^ v)
 
-effColored :: (Double' -> Color) -> State EffectObject () -> Int -> Effect -> Effect
+effColored :: (Float -> Color) -> State EffectObject () -> Int -> Effect -> Effect
 effColored f g time e = e & runAuto %~ (>> go) where
   go :: State EffectObject ()
   go = do
@@ -198,43 +199,44 @@ effColored f g time e = e & runAuto %~ (>> go) where
     let c = c1 - (e^.counter)
     when (0 <= c && c <= time) $ do
       let x = fromIntegral c/fromIntegral time
-      img .= (colored (f x) . (e^.img)) 
+      img .= (color (f x) . (e^.img))
     when (c == time) $ g
 
 effFadeIn :: Int -> Effect -> Effect
-effFadeIn n e = effColored (\x -> Color 1 1 1 (sin (x*pi/2))) (img .= (e^.img)) n e
+effFadeIn n e = let y x = sin $ x*(pi/2) in
+  effColored (Color 1 1 1 . y) (img .= (e^.img)) n e
 
 effFadeOut :: Int -> Effect -> Effect
-effFadeOut n e = effColored (\x -> Color 1 1 1 (cos (x*pi/2)))
-                 (img .= (colored (Color 1 1 1 0) . (e^.img))) n e
+effFadeOut n e = let y x = cos $ (x*pi/2) in
+  effColored (Color 1 1 1 . y) (img .= (color (Color 1 1 1 0) . (e^.img))) n e
 
-effCommonAnimated :: Int -> Resource -> Vec -> Effect
+effCommonAnimated :: Int -> Resource -> Vec2 -> Effect
 effCommonAnimated k res p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
   run :: State EffectObject ()
   run = do
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)
-    img .= \r -> fromBitmap $ (r^.effectImg) V.! k V.! i
+    img .= \r -> bitmap $ (r^.effectImg) V.! k V.! i
     counter %= (+1)
     when (i == V.length ((res^.effectImg) V.! k)) $ stateEffect .= Inactive
 
-effEnemyDead :: Resource -> Vec -> Effect
+effEnemyDead :: Resource -> Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
-effPlayerDead :: Resource -> Vec -> Effect
+effPlayerDead :: Resource -> Vec2 -> Effect
 effPlayerDead res = go . effCommonAnimated 1 res where
   go :: Effect -> Effect
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
 
-effEnemyStart :: Resource -> Vec -> Effect
+effEnemyStart :: Resource -> Vec2 -> Effect
 effEnemyStart res = go . effCommonAnimated 2 res where 
   go :: Effect -> Effect
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> size *= 1.01)
     
-effEnemyAttack :: Int -> Resource -> Vec -> Effect
+effEnemyAttack :: Int -> Resource -> Vec2 -> Effect
 effEnemyAttack i _ p =
   pos .~ p $
-  img .~ (\r -> fromBitmap $ (r^.effectImg) V.! 3 V.! i) $
+  img .~ (\r -> bitmap $ (r^.effectImg) V.! 3 V.! i) $
   size .~ 0 $
   runAuto .~ run $
   def
@@ -247,17 +249,17 @@ effEnemyAttack i _ p =
       angle += anglePlus i
       counter %= (+1)
         
-    anglePlus :: Int -> Double'
+    anglePlus :: Int -> Double
     anglePlus 0 = 1/300
     anglePlus 1 = -2/300
     anglePlus 2 = 3/300
-    anglePlus _ = undefined
+    anglePlus _ = error "otherwise case in anglePlus"
 
-chaosBomb :: Resource -> Vec -> Bullet
+chaosBomb :: Resource -> Vec2 -> Bullet
 chaosBomb res p =
   pos .~ p $
   kind .~ BallFrame $
-  color .~ Magenta $
+  bcolor .~ Magenta $
   size .~ V2 100 0 $
   stateBullet .~ PlayerB $
   runAuto .~ run $
@@ -297,12 +299,12 @@ liftTalk m = do
 say' :: Expr -> Stage ()
 say' m = singleton . Speak $ m <> clickend
 
-character :: Int -> Vec -> Stage Int
+character :: Int -> Vec2 -> Stage Int
 character n p = addEffect $ effFadeIn 30 $ eff where
   eff :: Effect
   eff = def 
         & pos .~ p
-        & img .~ (\res -> fromBitmap $ (res^.portraits) V.! n)
+        & img .~ (\res -> bitmap $ (res^.portraits) V.! n)
         & zIndex .~ Foreground
         & runAuto .~ (counter %= (+1))
 

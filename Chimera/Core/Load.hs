@@ -8,7 +8,8 @@ module Chimera.Core.Load (
   , areaBullet, getBulletBitmap
   ) where
 
-import Graphics.UI.FreeGame
+import FreeGame
+import FreeGame.Data.Font (charToBitmap, charBitmap)
 import Control.Lens
 import Data.Default
 import qualified Data.Foldable as F
@@ -21,21 +22,21 @@ import Chimera.Core.Types
 -- *unsafe*
 instance Default Resource where
   def = unsafePerformIO $ do
-    r1 <- loadBitmapFromFile "data/img/player_reimu.png"
-    r2 <- loadBitmapFromFile "data/img/dot_yousei.png"
-    r3 <- loadBitmapFromFile "data/img/shot.png"
-    b <- loadBitmapFromFile "data/img/board.png"
-    e1 <- loadBitmapFromFile "data/img/lightring.png"
-    e2 <- loadBitmapFromFile "data/img/lightbomb.png"
-    e3 <- loadBitmapFromFile "data/img/eff1.png"
-    e4 <- loadBitmapFromFile "data/img/eff2.png"
-    p1_0 <- loadBitmapFromFile "data/img/pat1_0.png"
-    p1_1 <- loadBitmapFromFile "data/img/pat1_1.png"
-    p1_2 <- loadBitmapFromFile "data/img/pat1_2.png"
-    la <- loadBitmapFromFile "data/img/layer_200_w.png"
+    r1 <- readBitmap "data/img/player_reimu.png"
+    r2 <- readBitmap "data/img/dot_yousei.png"
+    r3 <- readBitmap "data/img/shot.png"
+    b <- readBitmap "data/img/board.png"
+    e1 <- readBitmap "data/img/lightring.png"
+    e2 <- readBitmap "data/img/lightbomb.png"
+    e3 <- readBitmap "data/img/eff1.png"
+    e4 <- readBitmap "data/img/eff2.png"
+    p1_0 <- readBitmap "data/img/pat1_0.png"
+    p1_1 <- readBitmap "data/img/pat1_1.png"
+    p1_2 <- readBitmap "data/img/pat1_2.png"
+    la <- readBitmap "data/img/layer_200_w.png"
     f <- loadFont "data/font/VL-PGothic-Regular.ttf"
     
-    c1 <- loadBitmapFromFile "data/img/lufe_400.png"
+    c1 <- readBitmap "data/img/lufe_400.png"
     
     return $ Resource {
       _charaImg = V.fromList [cropBitmap r1 (50,50) (0,0),
@@ -51,7 +52,7 @@ instance Default Resource where
       _font = f,
       _layerBoard = la,
       _portraits = V.fromList [c1],
-      _numbers = undefined
+      _numbers = error "_numbers is not defined"
     }
 
 class GetPicture c where
@@ -59,10 +60,10 @@ class GetPicture c where
 
 execLoad :: Resource -> Game Resource
 execLoad res = do
-  F.mapM_ (translate (-500) . fromBitmap) (res^.charaImg)
-  F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.bulletImg)
-  F.mapM_ (F.mapM_ (translate (-500) . fromBitmap)) (res^.effectImg)
-  ns <- mapM (fmap charBitmap . charToBitmap (res^.font) 20) "0123456789"
+  F.mapM_ preloadBitmap (res^.charaImg)
+  F.mapM_ (F.mapM_ preloadBitmap) (res^.bulletImg)
+  F.mapM_ (F.mapM_ preloadBitmap) (res^.effectImg)
+  let ns = fmap (text (res^.font) 20 . return) "0123456789"
   return $ res
     & numbers .~ V.fromList ns
 
@@ -77,23 +78,23 @@ getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
 
 clipBulletBitmap :: BKind -> BColor -> Bitmap -> Bitmap
 clipBulletBitmap b c
-  | b == BallLarge  = clip (60 * color c) 0 60 60
-  | b == BallMedium = clip (30 * color c) 60 30 30
-  | b == BallSmall  = clip (20 * color c) 90 20 20
-  | b == Oval       = clip (160 + 10 * color c) 90 10 20
-  | b == Diamond    = clip (240 + 10 * color c) 90 10 20
-  | b == BallFrame  = clip (20 * color c) 110 20 20
-  | b == Needle     = clip (5 * color c) 130 5 100
-  | b == BallTiny   = clip (40 + 10 * color c) 130 10 10
-  | otherwise = undefined
+  | b == BallLarge  = clip (60 * colorOffset c) 0 60 60
+  | b == BallMedium = clip (30 * colorOffset c) 60 30 30
+  | b == BallSmall  = clip (20 * colorOffset c) 90 20 20
+  | b == Oval       = clip (160 + 10 * colorOffset c) 90 10 20
+  | b == Diamond    = clip (240 + 10 * colorOffset c) 90 10 20
+  | b == BallFrame  = clip (20 * colorOffset c) 110 20 20
+  | b == Needle     = clip (5 * colorOffset c) 130 5 100
+  | b == BallTiny   = clip (40 + 10 * colorOffset c) 130 10 10
+  | otherwise = error "otherwise case in clipBulletBitmap"
   where
-    color :: BColor -> Int
-    color = fromEnum
+    colorOffset :: BColor -> Int
+    colorOffset = fromEnum
 
     clip :: Int -> Int -> Int -> Int -> Bitmap -> Bitmap
     clip a b c d img = cropBitmap img (c,d) (a,b)
 
-areaBullet :: BKind -> Vec
+areaBullet :: BKind -> Vec2
 areaBullet BallLarge = V2 15 15
 areaBullet BallMedium = V2 7 7
 areaBullet BallSmall = V2 4 4

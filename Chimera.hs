@@ -1,20 +1,18 @@
 {-# LANGUAGE TemplateHaskell, GADTs #-}
 module Chimera where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict
 import Control.Monad.Operational.Mini
 import Data.Maybe (fromJust, isJust)
+import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
-import Control.Concurrent
 
 import Chimera.Engine
 import Chimera.Menu
 import Chimera.Scripts.Stage1
-
-makeLenses ''GUIParam
 
 type GameLoop = StateT GameFrame Game
 
@@ -23,18 +21,11 @@ data GameFrame = GameFrame {
   _stage :: Stage (),
   _field :: Field,
   _menu :: Select GameLoop,
-  _mEngine :: MessageEngine
+  _mEngine :: MessageEngine,
+  _quit :: Bool
   }
 
 makeLenses ''GameFrame
-
-window :: GUIParam
-window =
-  windowRegion .~ BoundingBox 0 0 640 480 $
-  framePerSecond .~ 60 $
-  windowTitle .~ "Chimera" $
-  clearColor .~ Color 0 0 0.2 1.0 $
-  def
 
 menuloop :: GameLoop ()
 menuloop = do
@@ -46,34 +37,32 @@ menuloop = do
 
 loadloop :: GameLoop ()
 loadloop = do
-  w <- embedIO $ forkIO $ waiting 0
+  font' <- use (field.resource.font)
+  lift $ waiting font'
   field.resource <~ (lift . execLoad =<< use (field.resource))
-  embedIO $ killThread w
 
   running .= stgloop
   where
-    waiting :: Int -> IO ()
-    waiting n = do
-      putStrLn $ "Loading.." ++ replicate n '.'
---      translate (V2 30 30) . colored white . text (font') 20 $ "読み込み中…"
-      threadDelay 1000000
-      waiting (n+1)
+    waiting :: Font -> Game ()
+    waiting font' = do
+      translate (V2 30 30) . color white . text (font') 20 $ "読み込み中…"
+      tick
 
 stgloop :: GameLoop ()
 stgloop = do
   gf <- get
   
-  lift $ draw undefined `execStateT` (gf ^. field)
+  lift $ paint (error "_") `execStateT` (gf ^. field)
   
   font' <- use (field.resource.font)
-  let write y = translate (V2 0 y) . colored white . text font' 20
+  let write y = translate (V2 0 y) . color white . text font' 20
   fps <- getFPS
   write 20 $ "fps:" ++ show fps
   write 40 $ "bullets:" ++ show (S.length $ gf^.field^.bullets)
   write 60 $ "enemies:" ++ show (S.length $ gf^.field^.enemy)
   write 80 $ "effects:" ++ show (S.length $ gf^.field^.effects)
   
-  field.player.keys <~ (lift.updateKeys =<< (use $ field.player.keys))
+  field.player `zoom` actPlayer
   field %= execState update
   when_ ((Talking ==) `fmap` (use $ field . stateField)) $ running .= talkloop
   when_ ((Shooting ==) `fmap` (use $ field . stateField)) $ do
@@ -88,7 +77,7 @@ talkloop = do
   
   me <- use mEngine
   f <- use field
-  lift $ draw (f^.resource) `execStateT` me
+  lift $ paint (f^.resource) `execStateT` me
   mEngine %= execState update
   
   when_ ((== End) `fmap` use (mEngine.stateEngine)) $ do
@@ -98,7 +87,7 @@ talkloop = do
     stage .= s'
   when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ 
     when_ (keyChar 'Z') $ mEngine.stateEngine .= Parsing
-  when_ (keySpecial KeyLeftControl) $ do
+  when_ (keyPress KeyLeftControl) $ do
     when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ do
       mEngine.stateEngine .= Parsing
     when_ ((== Printing) `fmap` use (mEngine.stateEngine)) $ do
@@ -119,20 +108,29 @@ talkloop = do
     runTalk (GetField :>>= next) = next `fmap` use field
     runTalk u = return u
 
-game :: IO (Maybe a)
-game = runGame window $ do
+game :: IO (Maybe ())
+game = runGame Windowed (BoundingBox 0 0 640 480) $ do
+  setFPS 60
+  setTitle "Chimera"
+  clearColor $ Color 0 0 0.2 1.0
   let field' = def & resource .~ def & isDebug .~ False
   
   let its = V.fromList [Item "Game Start" loadloop,
-                        Item "Quit" quit]
+                        Item "Quit" $ quit .= True]
   
   flip evalStateT (GameFrame {
                       _field = field',
                       _menu = def & items .~ its,
                       _mEngine = def,
                       _stage = stage1,
-                      _running = menuloop }) $ foreverTick $ do
-    go <- use running
-    go
+                      _running = menuloop, 
+                      _quit = False }) $ mainloop where
+    mainloop :: GameLoop ()
+    mainloop = do
+      go <- use running
+      go
     
-    when_ (keySpecial KeyEsc) $ quit
+      when_ (keyPress KeyEscape) $ quit .= True
+      q <- use quit
+      tick
+      unless q $ mainloop

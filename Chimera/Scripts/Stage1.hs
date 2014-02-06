@@ -3,9 +3,10 @@ module Chimera.Scripts.Stage1 (
   )
   where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (modify)
+import Data.Default (def)
 
 import Chimera.Core.World
 import Chimera.Scripts
@@ -65,10 +66,10 @@ zako n
   | n >= 10 = zakoCommon 0 (motionCommon 100 (Straight)) 50 BallMedium (toEnum $ n `mod` 10)
   | otherwise = return ()
   where
-    acc :: Int -> Vec
+    acc :: Int -> Vec2
     acc 0 = V2 (-0.05) 0.005
     acc 1 = V2 0.05 0.005
-    acc _ = undefined
+    acc _ = error "otherwise case in acc"
 
 boss1 :: Danmaku EnemyObject ()
 boss1 = do
@@ -88,7 +89,7 @@ boss1 = do
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
-      color .~ Red $
+      bcolor .~ Red $
       runAuto %~ (\f -> go 190 300 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
@@ -96,7 +97,7 @@ boss1 = do
       speed .~ 3 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
-      color .~ Yellow $
+      bcolor .~ Yellow $
       runAuto %~ (\f -> go 135 290 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
@@ -104,7 +105,7 @@ boss1 = do
       speed .~ 2.5 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
-      color .~ Green $
+      bcolor .~ Green $
       runAuto %~ (\f -> go 120 280 >> f) $
       def'
     shots $ (flip map) [1..4] $ \i ->
@@ -112,12 +113,12 @@ boss1 = do
       speed .~ 2.2 $
       angle +~ 2*pi*i/4 $
       kind .~ Oval $
-      color .~ Blue $
+      bcolor .~ Blue $
       runAuto %~ (\f -> go 100 270 >> f) $
       def'
 
   where
-    go :: Double' -> Double' -> Danmaku BulletObject ()
+    go :: Double -> Double -> Danmaku BulletObject ()
     go t1 t2 = liftS $ do
       counter %= (+1)
       cnt <- use counter
@@ -126,7 +127,7 @@ boss1 = do
         speed %= (subtract (7.0/t2))
       when (cnt == 170) $ do
         kind .= BallTiny
-        color .= Purple
+        bcolor .= Purple
         modify makeBullet
   
 boss2 :: Danmaku EnemyObject ()
@@ -147,7 +148,7 @@ boss2 = do
       pos .~ e^.pos $
       speed .~ 2 $
       angle .~ ang + fromIntegral i*2*pi/5 $
-      color .~ (toEnum $ i*2 `mod` 8) $
+      bcolor .~ (toEnum $ i*2 `mod` 8) $
       runAuto %~ (\f -> go i >> f) $
       def
   when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
@@ -157,7 +158,7 @@ boss2 = do
       speed .~ 1.5 $
       angle .~ ang $
       kind .~ BallLarge $
-      color .~ Purple $
+      bcolor .~ Purple $
       def
   
   where

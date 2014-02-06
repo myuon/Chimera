@@ -7,7 +7,8 @@ module Chimera.Layers (
   , message, printing, cursor, stateEngine, typingTime, layer
   ) where
 
-import Graphics.UI.FreeGame
+import FreeGame
+import FreeGame.Data.Bitmap (bitmapSize)
 import Control.Lens
 import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
@@ -18,8 +19,8 @@ import Chimera.Core.Types
 import Chimera.Core.Util
 
 data Layer = Layer {
-  _posLayer :: Vec,
-  _sizeLayer :: Vec,
+  _posLayer :: Vec2,
+  _sizeLayer :: Vec2,
   _imgLayer :: Resource -> Bitmap
   }
              
@@ -34,12 +35,12 @@ instance Default Layer where
 
 instance GUIClass Layer where
   update = return ()
-  draw res = do
+  paint res = do
     a <- get
     s <- use sizeLayer
     b <- ((\f -> f res) `fmap` use imgLayer)
     let s' = fmap fromIntegral $ fromPair $ bitmapSize b
-    translate (a^.posLayer) $ scale (s / s') $ fromBitmap b
+    translate (a^.posLayer) $ scale (s / s') $ bitmap b
 
 data StateEngine = Printing | Parsing | Waiting | End deriving (Eq, Show)
 data Token = Text String | ClickWait deriving (Eq, Show)
@@ -96,7 +97,7 @@ runToken (Text u) = do
   stateEngine .= Printing
   
   where
-    overflow :: String -> Vec -> String
+    overflow :: String -> Vec2 -> String
     overflow s (V2 w _) = foldr (\x y -> x ++ ('\n' : y)) "" $ unfoldr go s where
       go :: String -> Maybe (String, String)
       go [] = Nothing
@@ -124,14 +125,14 @@ instance GUIClass MessageEngine where
       m <- use printing
       when_ ((== length m) `fmap` use cursor) $ stateEngine .= Parsing
     
-  draw res = do
+  paint res = do
     la <- use layer
-    lift $ draw res `execStateT` la
+    lift $ paint res `execStateT` la
     c <- use cursor
     m <- use printing
-    translate (topleft la) . colored black . text (res^.font) 20 $ take c m
+    translate (topleft la) . color black . text (res^.font) 20 $ take c m
 
     where
-      topleft :: Layer -> Vec
+      topleft :: Layer -> Vec2
       topleft la = la^.posLayer - la^.sizeLayer/2 + V2 25 25
 

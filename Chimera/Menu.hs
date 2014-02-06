@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Chimera.Menu where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
 import Data.Default
 import Control.Monad.State.Strict
@@ -32,14 +32,14 @@ instance Default (Select m) where
 selectloop :: Font -> StateT (Select m) Game (Maybe (m ()))
 selectloop font = do
   its <- use items
-  let write y = translate (V2 100 (200+y)) . colored white . text font 20
+  let write y = translate (V2 100 (200+y)) . color white . text font 20
   mapM_ (\i -> write (fromIntegral (i+1)*30) $ (its V.! i)^.caption) [0..(V.length its)-1]
   
   p <- use pointing
-  translate (V2 70 (200+fromIntegral (p+1)*30)) . colored white . text font 20 $ "|>"
+  translate (V2 70 (200+fromIntegral (p+1)*30)) . color white . text font 20 $ "|>"
   
-  when_ (keySpecial KeyDown) $ pointing += 1
-  when_ (keySpecial KeyUp) $ pointing -= 1
+  when_ (keyDown KeyDown) $ pointing += 1
+  when_ (keyDown KeyUp) $ pointing -= 1
   
   when_ ((<0) `fmap` use pointing) $ pointing .= 0
   when_ ((> V.length its - 1) `fmap` use pointing) $ pointing .= (V.length its - 1)

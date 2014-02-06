@@ -2,7 +2,8 @@
 {-# LANGUAGE FlexibleInstances, GADTs, FlexibleContexts, RankNTypes #-}
 module Chimera.Core.Types where
 
-import Graphics.UI.FreeGame
+import FreeGame
+import FreeGame.UI (UI)
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, interpret)
 import Control.Monad.Operational.TH (makeSingletons)
@@ -54,7 +55,7 @@ data Resource = Resource {
   _font :: Font,
   _layerBoard :: Bitmap,
   _portraits :: V.Vector Bitmap,
-  _numbers :: V.Vector Bitmap
+  _numbers :: V.Vector (Game ())
   }
 
 makeLenses ''Resource
@@ -70,7 +71,7 @@ makeLenses ''LookAt
 
 class GUIClass c where
   update :: State c ()
-  draw :: Resource -> StateT c Game ()
+  paint :: Resource -> StateT c Game ()
 
 data Pattern p q x where
   GetLocal :: Pattern p q p
@@ -99,13 +100,13 @@ liftState getS putS s = do
   return s'
 
 data Object = Object {
-  _pos :: Vec,
-  _spXY :: Vec,
-  _speed :: Double',
-  _angle :: Double',
+  _pos :: Vec2,
+  _spXY :: Vec2,
+  _speed :: Double,
+  _angle :: Double,
   
   _counter :: Int,
-  _size :: Vec
+  _size :: Vec2
   } deriving (Eq, Show)
 
 makeClassy ''Object
@@ -167,7 +168,7 @@ instance Default EffectObject where
     _objectEffect = def, 
     _stateEffect = Active,
     _slowRate = 3,
-    _img = undefined,
+    _img = error "_img is not defined",
     _zIndex = Background
     }
 
@@ -178,7 +179,7 @@ data BulletObject = BulletObject {
   _objectBullet :: Object,
   _stateBullet :: StateBullet,
   _kind :: BKind,
-  _color :: BColor
+  _bcolor :: BColor
   } deriving (Eq, Show)
 
 makeClassy ''BulletObject
@@ -189,7 +190,7 @@ instance Default BulletObject where
     _objectBullet = (size .~ V2 3 3 $ def),
     _stateBullet = EnemyB,
     _kind = BallMedium,
-    _color = Red
+    _bcolor = Red
     }
 
 data EnemyObject = EnemyObject {
@@ -240,9 +241,9 @@ collide c b = case b^.speed > b^.size^._x || b^.speed > b^.size^._y of
             (a^.pos + r !* (V2   w'  (-h'))) `isIn` b,
             (a^.pos + r !* (V2 (-w') (-h'))) `isIn` b]
     
-    isIn :: (HasObject c) => Vec -> c -> Bool
+    isIn :: (HasObject c) => Vec2 -> c -> Bool
     isIn p box = isInCentoredBox (p-box^.pos) where
-      isInCentoredBox :: Vec -> Bool
+      isInCentoredBox :: Vec2 -> Bool
       isInCentoredBox p' = 
         let V2 px' py' = rot2D (-box^.angle) !* p' in
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2

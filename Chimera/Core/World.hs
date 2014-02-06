@@ -1,7 +1,8 @@
 {-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts, RankNTypes #-}
 module Chimera.Core.World (
-  Player, keys, Bullet, Enemy, Field, StateField(..), Danmaku
+  Player, keysPlayer, actPlayer
+  , Bullet, Enemy, Field, StateField(..), Danmaku
   , player, enemy, bullets, effects, stateField
   , makeBullet
   , resource, counterF, isDebug
@@ -10,24 +11,36 @@ module Chimera.Core.World (
   , module M
   ) where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (State, get, execState, execStateT, lift)
+import Control.Monad.State.Strict (State, StateT, get, execState, execStateT, lift)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
+import qualified Data.Map as M
 import Data.Default
 
 import Chimera.Core.Types as M
 import Chimera.Core.Util as M
-import Chimera.Core.UI as M
 import Chimera.Core.Load (picture, GetPicture, areaBullet, getBulletBitmap)
+
+keyList :: [Key]
+keyList = [charToKey 'Z', charToKey 'X', KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift]
 
 data Player = Player {
   _charaPlayer :: Chara,
-  _keys :: Keys
+  _keysPlayer :: M.Map Key Int
   }
 
 makeLenses ''Player
+
+actPlayer :: StateT Player Game ()
+actPlayer = do
+  pairs <- lift $ mapM (\k -> (,) k `fmap` fromEnum `fmap` keyPress k) keyList
+  keysPlayer %= M.unionWith go (M.fromList pairs)
+  where
+    go a b
+      | a == 0 = 0
+      | otherwise = a + b
 
 instance HasChara Player where chara = charaPlayer
 instance HasObject Player where object = chara . object
@@ -40,7 +53,7 @@ instance Default Player where
       size .~ V2 5 5 $
       hp .~ 10 $
       def,
-    _keys = def
+    _keysPlayer = M.fromList $ zip keyList [0..]
     }
 
 instance GetPicture Player where
@@ -49,29 +62,32 @@ instance GetPicture Player where
 instance GUIClass Player where
   update = do
     s <- use speed
-    k <- use keys
+    k <- use keysPlayer
     counter %= (+1)
-    pos %= clamp . (+ (bool id (0.5*^) (k^.shift>0) $ s *^ dir k))
+    pos += case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
+      True -> ((0.5 * s) *^ dir k)
+      False -> s *^ dir k
+    pos %= clamp
 
     where
-      dir :: Keys -> Vec
-      dir key = let addTup b p q = bool q (fromPair p+q) b in
-        addTup (key ^. up    > 0) (0,-1) $
-        addTup (key ^. down  > 0) (0,1) $
-        addTup (key ^. right > 0) (1,0) $
-        addTup (key ^. left  > 0) (-1,0) $
+      dir :: M.Map Key Int -> Vec2
+      dir k = let addTup b p q = bool q (fromPair p+q) b in
+        addTup (k M.! KeyUp    > 0) (0,-1) $
+        addTup (k M.! KeyDown  > 0) (0,1) $
+        addTup (k M.! KeyRight > 0) (1,0) $
+        addTup (k M.! KeyLeft  > 0) (-1,0) $
         fromPair (0,0)
 
-  draw res = do
+  paint res = do
     p <- get
-    translate (p ^. pos) $ fromBitmap (picture res p)
+    translate (p ^. pos) $ bitmap (picture res p)
 
 instance GUIClass Effect where
   update = do
     run <- use runAuto
     effectObject %= execState run
   
-  draw res = do
+  paint res = do
     b <- get
     translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ lift $ b^.img $ res
 
@@ -82,7 +98,7 @@ instance HasObject Bullet where object = auto . object
 instance HasBulletObject Bullet where bulletObject = auto
 
 instance GetPicture Bullet where
-  picture res b = getBulletBitmap (res^.bulletImg) (b^.kind) (b^.color)
+  picture res b = getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
 
 instance GUIClass Bullet where
   update = do
@@ -92,9 +108,9 @@ instance GUIClass Bullet where
     p <- use pos
     when (isInside p == False) $ stateBullet .= Outside
 
-  draw res = do
+  paint res = do
     b <- get
-    let p = fromBitmap (picture res b)
+    let p = bitmap $ picture res b
     case b^.size^._x /= b^.size^._y of
       True -> translate (b^.pos) $ rotateR (b^.angle + pi/2) $ p
       False -> translate (b^.pos) $ p
@@ -120,10 +136,10 @@ instance GUIClass Enemy where
     effectEnemy %= 
       S.filter (\e -> e^.stateEffect /= Inactive) . fmap (\e -> update `execState` e)
   
-  draw res = do
+  paint res = do
     c <- get
-    mapM_' (\e -> lift $ draw res `execStateT` e) (c^.effectEnemy)
-    translate (c^.pos) $ fromBitmap (picture res c)
+    mapM_' (\e -> lift $ paint res `execStateT` e) (c^.effectEnemy)
+    translate (c^.pos) $ bitmap (picture res c)
 
 data StateField = Shooting | Talking deriving (Eq, Show)
 
@@ -148,7 +164,7 @@ instance Default Field where
     _bullets = S.empty,
     _effects = S.empty,
     
-    _resource = undefined,
+    _resource = error "_resource is not defined.",
     _counterF = 0,
     _isDebug = False,
     _stateField = Shooting

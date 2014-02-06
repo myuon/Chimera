@@ -1,11 +1,13 @@
 module Chimera.Engine ( module M ) where
 
-import Graphics.UI.FreeGame
+import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (get, lift, execStateT, execState, State)
 import Data.Char (digitToInt)
+import Data.Default (def)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
+import qualified Data.Map as M
 
 import Chimera.Core.Load as M
 import Chimera.Core.World as M
@@ -38,28 +40,28 @@ instance GUIClass Field where
     player %= execState update
     effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
       
-  draw _ = do
+  paint _ = do
     f <- get
     res <- use resource
     
-    let drawEffs z = mapM_' (\e -> lift $ draw res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
+    let drawEffs z = mapM_' (\e -> lift $ paint res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
     
     drawEffs Background
     
-    lift $ draw res `execStateT` (f^.player)
-    mapM_' (\p -> lift $ draw res `execStateT` p) (f^.bullets)
-    mapM_' (\e -> lift $ draw res `execStateT` e) (f^.enemy)
+    lift $ paint res `execStateT` (f^.player)
+    mapM_' (\p -> lift $ paint res `execStateT` p) (f^.bullets)
+    mapM_' (\e -> lift $ paint res `execStateT` e) (f^.enemy)
     drawEffs OnObject
 
     when (f^.isDebug) $ do
-      mapM_' (\b -> colored blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
-      (\p -> colored yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
-      mapM_' (\e -> colored green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
+      mapM_' (\b -> color blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
+      (\p -> color yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
+      mapM_' (\e -> color green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
-    translate (V2 320 240) $ fromBitmap (f^.resource^.board)
+    translate (V2 320 240) $ bitmap (f^.resource^.board)
     let score = f^.counterF
-    flip mapM (zip (show score) [1..]) $ \(n, i) -> 
-      translate (V2 (430 + i*13) 30) $ fromBitmap $ (f^.resource^.numbers) V.! (digitToInt n)
+    forM_ (zip (show score) [1..]) $ \(n, i) -> 
+      lift $ translate (V2 (430 + i*13) 30) $ (f^.resource^.numbers) V.! (digitToInt n)
     drawEffs Foreground
     
 collideObj :: State Field ()
@@ -100,19 +102,19 @@ collideObj = do
                     Resource -> StateBullet -> c -> Effect
     createEffect res PlayerB e = effPlayerDead res (e^.pos)
     createEffect res EnemyB e = effPlayerDead res (e^.pos)
-    createEffect _ _ _ = undefined
+    createEffect _ _ _ = error "otherwise case in createEffect"
       
 addBullet :: State Field ()
 addBullet = do
   p <- use player
-  when (p^.keys^.zKey > 0 && p^.counter `mod` 10 == 0) $ do
+  when ((p^.keysPlayer) M.! (charToKey 'Z') > 0 && p^.counter `mod` 10 == 0) $ do
     bullets ><= (S.fromList
       [def' & pos .~ (p^.pos) + V2 5 0,
        def' & pos .~ (p^.pos) + V2 15 0,
        def' & pos .~ (p^.pos) - V2 5 0,
        def' & pos .~ (p^.pos) - V2 15 0])
   
-  when (p^.keys^.xKey > 0 && p^.counter `mod` 20 == 0) $ do
+  when ((p^.keysPlayer) M.! (charToKey 'X') > 0 && p^.counter `mod` 20 == 0) $ do
     res <- use resource
     bullets ><= (S.singleton $ chaosBomb res (p^.pos))
   
@@ -123,6 +125,6 @@ addBullet = do
       speed .~ 15 $
       angle .~ pi/2 $ 
       kind .~ Diamond $
-      color .~ Red $
+      bcolor .~ Red $
       stateBullet .~ PlayerB $
       def
