@@ -59,11 +59,34 @@ instance GUIClass Field where
       mapM_' (\e -> color green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ bitmap (f^.resource^.board)
-    let score = f^.counterF
-    forM_ (zip (show score) [1..]) $ \(n, i) -> 
-      lift $ translate (V2 (430 + i*13) 30) $ (f^.resource^.numbers) V.! (digitToInt n)
+
+    fps <- lift $ getFPS
+    lift $ translate (V2 430 30) $ (f^.resource^.labels) M.! "fps"
+    lift $ drawScore (f^.resource) fps 30
+
+    lift $ translate (V2 430 50) $ (f^.resource^.labels) M.! "score"
+    lift $ drawScore (f^.resource) (f^.counterF) 50
+
+    lift $ translate (V2 430 70) $ (f^.resource^.labels) M.! "hiscore"
+    lift $ drawScore (f^.resource) 0 70
+
+
+    lift $ translate (V2 430 120) $ (f^.resource^.labels) M.! "bullets"
+    lift $ drawScore (f^.resource) (S.length $ f^.bullets) 120
+
+    lift $ translate (V2 430 140) $ (f^.resource^.labels) M.! "enemies"
+    lift $ drawScore (f^.resource) (S.length $ f^.enemy) 140
+
+    lift $ translate (V2 430 160) $ (f^.resource^.labels) M.! "effects"
+    lift $ drawScore (f^.resource) (S.length $ f^.effects) 160 
+
     drawEffs Foreground
-    
+
+drawScore :: Resource -> Int -> Double -> Game ()
+drawScore res sc y = do
+  forM_ (zip (show sc) [1..]) $ \(n, i) -> 
+    translate (V2 (550 + i*13) y) $ (res^.numbers) V.! (digitToInt n)
+
 collideObj :: State Field ()
 collideObj = do
   p <- use player

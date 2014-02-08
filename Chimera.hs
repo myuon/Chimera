@@ -38,30 +38,22 @@ menuloop = do
 loadloop :: GameLoop ()
 loadloop = do
   font' <- use (field.resource.font)
-  lift $ waiting font'
   field.resource <~ (lift . execLoad =<< use (field.resource))
+  lift $ waiting font' 0
 
   running .= stgloop
   where
-    waiting :: Font -> Game ()
-    waiting font' = do
-      translate (V2 30 30) . color white . text (font') 20 $ "読み込み中…"
+    waiting :: Font -> Int -> Game ()
+    waiting font' n = do
+      translate (V2 30 30) . color white . text (font') 20 $ "読み込み中…" ++ show n
       tick
+      when (n < 1) $ waiting font' $ n+1
 
 stgloop :: GameLoop ()
 stgloop = do
   gf <- get
-  
+
   lift $ paint (error "_") `execStateT` (gf ^. field)
-  
-  font' <- use (field.resource.font)
-  let write y = translate (V2 0 y) . color white . text font' 20
-  fps <- getFPS
-  write 20 $ "fps:" ++ show fps
-  write 40 $ "bullets:" ++ show (S.length $ gf^.field^.bullets)
-  write 60 $ "enemies:" ++ show (S.length $ gf^.field^.enemy)
-  write 80 $ "effects:" ++ show (S.length $ gf^.field^.effects)
-  
   field.player `zoom` actPlayer
   field %= execState update
   when_ ((Talking ==) `fmap` (use $ field . stateField)) $ running .= talkloop
@@ -113,7 +105,8 @@ game = runGame Windowed (BoundingBox 0 0 640 480) $ do
   setFPS 60
   setTitle "Chimera"
   clearColor $ Color 0 0 0.2 1.0
-  let field' = def & resource .~ def & isDebug .~ False
+  r <- initResource
+  let field' = def & resource .~ r & isDebug .~ False
   
   let its = V.fromList [Item "Game Start" loadloop,
                         Item "Quit" $ quit .= True]

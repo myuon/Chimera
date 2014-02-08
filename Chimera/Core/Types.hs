@@ -3,13 +3,13 @@
 module Chimera.Core.Types where
 
 import FreeGame
-import FreeGame.UI (UI)
 import Control.Lens
 import Control.Monad.Operational.Mini (Program, interpret)
 import Control.Monad.Operational.TH (makeSingletons)
 import Control.Monad.State.Strict (State, StateT, execState, runState, get, put)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
+import qualified Data.Map as M
 import qualified Data.Foldable as F
 import Data.Default
 
@@ -55,7 +55,8 @@ data Resource = Resource {
   _font :: Font,
   _layerBoard :: Bitmap,
   _portraits :: V.Vector Bitmap,
-  _numbers :: V.Vector (Game ())
+  _numbers :: V.Vector (Game ()),
+  _labels :: M.Map String (Game ())
   }
 
 makeLenses ''Resource

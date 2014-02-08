@@ -1,5 +1,5 @@
 module Chimera.Scripts.Stage1 (
-  load1, stage1
+  stage1
   )
   where
 
@@ -10,9 +10,6 @@ import Data.Default (def)
 
 import Chimera.Core.World
 import Chimera.Scripts
-
-load1 :: Resource
-load1 = def
 
 stage1 :: Stage ()
 stage1 = do
@@ -32,6 +29,8 @@ stage1 = do
       aline "free-gameの名前の由来にもなっているFreeモナドは、functorから最低限の構造をもったMonadを創りだすことができる道具です。" `click`
       aline "これによってChimeraではGameができStageが記述されDanmakuを形作っているのです。" `click`
       aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
+
+--  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10

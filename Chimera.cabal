@@ -19,7 +19,7 @@ executable Chimera
   main-is:           Main.hs
   -- other-modules:       
   build-depends:     base >=4.3 && <5
-                   , free-game >=1.0.2
+                   , free-game >=1.0.3 && <1.1
                    , lens >=3.9 && <4.1
                    , mtl ==2.1.*
                    , time ==1.4.*
@@ -28,4 +28,4 @@ executable Chimera
                    , data-default >=0.5
                    , vector >=0.10
                    , transformers >=0.2
-  ghc-options:       -O2
+  ghc-options:       -O2 -Wall

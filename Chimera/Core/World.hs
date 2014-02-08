@@ -80,7 +80,7 @@ instance GUIClass Player where
 
   paint res = do
     p <- get
-    translate (p ^. pos) $ bitmap (picture res p)
+    draw $ translate (p ^. pos) $ bitmap (picture res p)
 
 instance GUIClass Effect where
   update = do
@@ -139,7 +139,7 @@ instance GUIClass Enemy where
   paint res = do
     c <- get
     mapM_' (\e -> lift $ paint res `execStateT` e) (c^.effectEnemy)
-    translate (c^.pos) $ bitmap (picture res c)
+    draw $ translate (c^.pos) $ bitmap (picture res c)
 
 data StateField = Shooting | Talking deriving (Eq, Show)
 
