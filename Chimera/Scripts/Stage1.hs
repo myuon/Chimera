@@ -30,7 +30,8 @@ stage1 = do
       aline "これによってChimeraではGameができStageが記述されDanmakuを形作っているのです。" `click`
       aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
 
---  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
+  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
+  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
@@ -62,7 +63,7 @@ stage1 = do
 zako :: Int -> Danmaku EnemyObject ()
 zako n
   | n >= 20 = zakoCommon 0 (motionCommon 100 (Curve (acc $ n `mod` 10))) 50 Needle Purple
-  | n >= 10 = zakoCommon 0 (motionCommon 100 (Straight)) 50 BallMedium (toEnum $ n `mod` 10)
+  | n >= 10 = zakoCommon 0 (motionCommon 100 Straight) 50 BallMedium (toEnum $ n `mod` 10)
   | otherwise = return ()
   where
     acc :: Int -> Vec2
@@ -128,7 +129,7 @@ boss1 = do
         kind .= BallTiny
         bcolor .= Purple
         modify makeBullet
-  
+
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
   e <- get'
@@ -164,7 +165,7 @@ boss2 = do
     go :: Int -> Danmaku BulletObject ()
     go _ = do
       b <- get'
-      let t = pi/(3)
+      let t = pi/3
       let time = 50
       when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $ do
         shots $ return $ def & auto .~ b & angle +~ t
@@ -176,4 +177,40 @@ boss2 = do
           speed += 1.5
           angle -= t
         when (cnt < 200) $ do
+          speed -= (fromIntegral $ time - cnt `mod` time)/1000
+
+boss3 :: Danmaku EnemyObject ()
+boss3 = do
+  e <- get'
+  liftS $ motionCommon 100 Stay
+  p <- getPlayer
+  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  
+  let n = 8 :: Int
+  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
+    shots $ (flip map) [0..n] $ \i ->
+      makeBullet $
+      pos .~ e^.pos $
+      speed .~ 2 $
+      angle .~ ang + fromIntegral i*2*pi/fromIntegral n $
+      bcolor .~ (toEnum $ i*2 `mod` 8) $
+      kind .~ Needle $
+      runAuto %~ (\f -> go >> f) $
+      def
+  
+  where
+    go :: Danmaku BulletObject ()
+    go = do
+      b <- get'
+      let t = pi/3
+      let time = 50
+      when ((b^.counter) == 200) $
+        shots $ return $ def & auto .~ b & angle +~ t & kind .~ Oval
+      
+      liftS $ do
+        counter %= (+1)
+        cnt <- use counter
+        when (cnt < 200 && cnt `mod` time == 0) $ do
+          speed += 1.5
+        when (cnt < 200) $
           speed -= (fromIntegral $ time - cnt `mod` time)/1000

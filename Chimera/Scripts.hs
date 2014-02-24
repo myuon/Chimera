@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, GADTs, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeOperators, DataKinds #-}
 module Chimera.Scripts (
@@ -45,7 +45,7 @@ type Stage = ReifiedProgram Line
 runStage :: Stage () -> State Field (Stage ())
 runStage (GetResourceLine :>>= next) = next `fmap` use resource
 runStage (AppearEnemy e :>>= next) = enemy %= (S.|> e) >> return (next ())
-runStage (Wait n :>>= next) = do
+runStage (Wait n :>>= next) =
   case n == 0 of
     True -> return (next ())
     False -> return (Wait (n-1) :>>= next)

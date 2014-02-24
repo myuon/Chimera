@@ -80,7 +80,7 @@ instance GUIClass Player where
 
   paint res = do
     p <- get
-    draw $ translate (p ^. pos) $ bitmap (picture res p)
+    draw $ translate (p^.pos) $ bitmap (picture res p)
 
 instance GUIClass Effect where
   update = do
@@ -89,7 +89,7 @@ instance GUIClass Effect where
   
   paint res = do
     b <- get
-    translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ lift $ b^.img $ res
+    lift $ translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ b^.img $ res
 
 type Danmaku c = Runner c (Field, S.Seq (State Field ()))
 
@@ -106,14 +106,14 @@ instance GUIClass Bullet where
     t <- use angle
     pos %= (+ fromPolar (r,t))
     p <- use pos
-    when (isInside p == False) $ stateBullet .= Outside
+    unless (isInside p) $ stateBullet .= Outside
 
   paint res = do
     b <- get
-    let p = bitmap $ picture res b
     case b^.size^._x /= b^.size^._y of
-      True -> translate (b^.pos) $ rotateR (b^.angle + pi/2) $ p
-      False -> translate (b^.pos) $ p
+      True -> draw $ translate (b^.pos) $ 
+              rotateR (b^.angle + pi/2) $ bitmap (picture res b)
+      False -> draw $ translate (b^.pos) $ bitmap (picture res b)
 
 makeBullet :: (HasObject c, HasBulletObject c) => c -> c
 makeBullet b = b & size .~ areaBullet (b^.kind)
@@ -172,7 +172,7 @@ instance Default Field where
 
 
 instance HasGetResource (Danmaku c) where
-  getResource = (^.resource) `fmap` (fst `fmap` getGlobal)
+  getResource = ((^.resource) . fst) `fmap` getGlobal
 
 runDanmaku :: Danmaku c () -> State (LookAt c (Field, S.Seq (State Field ()))) ()
 runDanmaku = runPattern

@@ -18,7 +18,7 @@ import Chimera.Core.Types
 
 initResource :: Game Resource
 initResource = do
-  r1 <- readBitmap "data/img/player_reimu.png"
+  r1 <- readBitmap "data/img/player_lufe.png"
   r2 <- readBitmap "data/img/dot_yousei.png"
   r3 <- readBitmap "data/img/shot.png"
   b <- readBitmap "data/img/board.png"
