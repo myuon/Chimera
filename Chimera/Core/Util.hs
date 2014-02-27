@@ -8,7 +8,7 @@ module Chimera.Core.Util (
   , isInside
   , boxVertex, boxVertexRotated
   , cutIntoN
-  , sequence_', mapM_', when_, (><=)
+  , when_, (><=)
   , rot2D
   , clamp
   ) where
@@ -52,12 +52,6 @@ boxVertexRotated pos size angle = let r = rot2D angle in
 cutIntoN :: Int -> Bitmap -> [Bitmap]
 cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
   [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
-
-sequence_' :: Monad m => S.Seq (m a) -> m () 
-sequence_' ms = F.foldr (>>) (return ()) ms
-
-mapM_' :: Monad m => (a -> m b) -> S.Seq a -> m ()
-mapM_' f as = sequence_' (fmap f as)
 
 when_ :: (Monad m) => m Bool -> m () -> m ()
 when_ mp m = mp >>= (\b -> when b m)

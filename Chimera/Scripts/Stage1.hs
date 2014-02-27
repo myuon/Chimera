@@ -73,8 +73,8 @@ zako n
 
 boss1 :: Danmaku EnemyObject ()
 boss1 = do
-  e <- get'
-  liftS $ motionCommon 100 Stay
+  e <- self
+  hook $ Left $ motionCommon 100 Stay
   res <- getResource
   when (e^.counter == 130) $ effs $ return $ effEnemyStart res (e^.pos)
   when (e^.counter == 200) $
@@ -119,7 +119,7 @@ boss1 = do
 
   where
     go :: Double -> Double -> Danmaku BulletObject ()
-    go t1 t2 = liftS $ do
+    go t1 t2 = hook $ Left $ do
       counter %= (+1)
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
@@ -132,8 +132,8 @@ boss1 = do
 
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
-  e <- get'
-  liftS $ motionCommon 100 Stay
+  e <- self
+  hook $ Left $ motionCommon 100 Stay
   res <- getResource
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
@@ -164,13 +164,13 @@ boss2 = do
   where
     go :: Int -> Danmaku BulletObject ()
     go _ = do
-      b <- get'
+      b <- self
       let t = pi/3
       let time = 50
       when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $ do
         shots $ return $ def & auto .~ b & angle +~ t
       
-      liftS $ do
+      hook $ Left $ do
         counter %= (+1)
         cnt <- use counter
         when (cnt < 200 && cnt `mod` time == 0) $ do
@@ -181,8 +181,8 @@ boss2 = do
 
 boss3 :: Danmaku EnemyObject ()
 boss3 = do
-  e <- get'
-  liftS $ motionCommon 100 Stay
+  e <- self
+  hook $ Left $ motionCommon 100 Stay
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
   
@@ -201,13 +201,13 @@ boss3 = do
   where
     go :: Danmaku BulletObject ()
     go = do
-      b <- get'
+      b <- self
       let t = pi/3
       let time = 50
       when ((b^.counter) == 200) $
         shots $ return $ def & auto .~ b & angle +~ t & kind .~ Oval
       
-      liftS $ do
+      hook $ Left $ do
         counter %= (+1)
         cnt <- use counter
         when (cnt < 200 && cnt `mod` time == 0) $ do

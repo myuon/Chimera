@@ -12,6 +12,7 @@ import FreeGame
 import Control.Lens
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.Foldable as F
 
 import Chimera.Core.Util
 import Chimera.Core.Types
@@ -56,7 +57,11 @@ class GetPicture c where
   picture :: Resource -> c -> Bitmap
 
 execLoad :: Resource -> Game Resource
-execLoad res = return $ res
+execLoad res = do
+  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
+  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
+  forkFrame $ F.mapM_ (F.mapM_ preloadBitmap) $ res ^. bulletImg
+  return $ res
     & numbers .~ V.fromList ns
     & labels .~ M.fromList ls
   
@@ -67,9 +72,9 @@ execLoad res = return $ res
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 
-  V.fromList [V.fromList [clipBulletBitmap (toEnum k) (toEnum c) pic
-                         | c <- [fromEnum Red .. fromEnum Magenta]] 
-             | k <- [fromEnum BallLarge .. fromEnum BallTiny]]
+  V.fromList [V.fromList [clipBulletBitmap k c pic
+                         | c <- [Red .. Magenta]] 
+             | k <- [BallLarge .. Needle]]
 
 getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
 getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)

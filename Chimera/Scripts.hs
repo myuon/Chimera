@@ -4,7 +4,7 @@
 module Chimera.Scripts (
   Line(..), Stage, runStage
   , appearAt, keeper
-  , liftS, getPlayer, shots, effs, globalEffs, get', put', wait
+  , getPlayer, shots, effs, globalEffs, wait
   , initEnemy
   , MotionCommon(..)
   , motionCommon
@@ -29,8 +29,10 @@ import qualified Data.Sequence as S
 import Chimera.Core.World
 import Chimera.Layers as M
 
+
+data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
+
 data Line p where
-  GetResourceLine :: Line Resource
   AppearEnemy :: Enemy -> Line ()
   LiftField :: State Field () -> Line ()
   GetField :: Line Field
@@ -41,9 +43,10 @@ data Line p where
   Endtalk :: Line ()
 
 type Stage = ReifiedProgram Line
+instance HasGetResource Stage where
+  getResource = (^.resource) `fmap` singleton GetField
 
 runStage :: Stage () -> State Field (Stage ())
-runStage (GetResourceLine :>>= next) = next `fmap` use resource
 runStage (AppearEnemy e :>>= next) = enemy %= (S.|> e) >> return (next ())
 runStage (Wait n :>>= next) =
   case n == 0 of
@@ -59,8 +62,6 @@ runStage (LiftField f :>>= next) = f >> return (next ())
 runStage (GetField :>>= next) = next `fmap` get
 runStage u = return u
 
-instance HasGetResource Stage where getResource = singleton GetResourceLine
-
 -- APIs for Stage Monad
 liftField :: State Field () -> Stage ()
 liftField = singleton . LiftField
@@ -72,7 +73,7 @@ appearAt :: Int -> Enemy -> Stage ()
 appearAt n e = wait n >> (singleton . AppearEnemy) e
 
 keeper :: Enemy -> Stage ()
-keeper e = (singleton . AppearEnemy) e >> (singleton Stop)
+keeper e = (singleton . AppearEnemy) e >> singleton Stop
 
 addEffect :: Effect -> Stage Int
 addEffect e = do
@@ -81,34 +82,23 @@ addEffect e = do
   return $ S.length $ f^.effects
 
 -- APIs for Danmaku Monad
-liftS :: State c () -> Danmaku c ()
-liftS = liftLocal
-
 getPlayer :: Danmaku c Player
-getPlayer = (^.player) `fmap` readGlobal
+getPlayer = (^.player) `fmap` env
 
 shots :: [Bullet] -> Danmaku c ()
-shots bs = liftGlobal $ bullets ><= (S.fromList bs)
+shots bs = hook $ Right $ bullets ><= S.fromList bs
 
 effs :: [Effect] -> Danmaku EnemyObject ()
-effs es = liftS $ effectEnemy ><= (S.fromList es)
+effs es = hook $ Left $ effectEnemy ><= S.fromList es
 
 globalEffs :: [Effect] -> Danmaku c ()
-globalEffs es = liftGlobal $ effects ><= (S.fromList es)
-
-get' :: Danmaku c c
-get' = getLocal
-
-put' :: c -> Danmaku c ()
-put' = putLocal
+globalEffs es = hook $ Right $ effects ><= S.fromList es
 
 initEnemy :: Vec2 -> Int -> Enemy
 initEnemy p h =
   pos .~ p $
   hp .~ h $
   def
-
-data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
 motionCommon :: Int -> MotionCommon -> State EnemyObject ()
 motionCommon time (Straight) = do
@@ -147,8 +137,8 @@ motionCommon _ (Stay) = do
 
 zakoCommon :: Int -> State EnemyObject () -> Int -> BKind -> BColor -> Danmaku EnemyObject ()
 zakoCommon _ mot time bk c = do
-  e <- get'
-  liftS mot
+  e <- self
+  hook $ Left mot
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
 
@@ -164,13 +154,13 @@ zakoCommon _ mot time bk c = do
 
 debug :: Danmaku EnemyObject ()
 debug = do
-  e <- get'
-  liftS $ motionCommon 100 Stay  
+  e <- self
+  hook $ Left $ motionCommon 100 Stay  
   let cnt = e ^. counter
   let n = 20
 
   when (cnt `mod` 4 == 0 && e ^. spXY == 0) $
-    shots $ (flip map) [1..n] $ \i ->
+    shots $ flip map [1..n] $ \i ->
       makeBullet $
       pos .~ (e^.pos) $ 
       speed .~ 0.5 $
@@ -268,17 +258,17 @@ chaosBomb res p =
   where
     bomb :: (HasObject c) => c -> Bullet -> Bullet
     bomb e b = case b^.stateBullet == EnemyB && 
-                    (e^.size^._x)^2 > (quadrance $ b^.pos - e^.pos) of 
+                    (e^.size^._x)^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
       True -> chaosBomb res (b^.pos) & size .~ V2 ((e^.size^._x) / 1.4) 0
       False -> b
     
     run :: Danmaku BulletObject ()
     run = do
-      e <- get'
+      e <- self
       when (e^.counter == 0) $ globalEffs $ [eff e]
-      when (e^.counter == 5) $ liftGlobal $ bullets %= fmap (bomb e)
+      when (e^.counter == 5) $ hook $ Right $ bullets %= fmap (bomb e)
       
-      liftS $ do
+      hook $ Left $ do
         counter %= (+1)
         c <- use counter
         when (c == 10) $ stateBullet .= Outside

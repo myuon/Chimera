@@ -8,6 +8,7 @@ import Data.Default (def)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.Foldable as F
 
 import Chimera.Core.Load as M
 import Chimera.Core.World as M
@@ -27,12 +28,11 @@ instance GUIClass Field where
     
     -- append
     f <- get
-    when_ ((Shooting ==) `fmap` use stateField) $ do
-      addBullet
+    when_ ((Shooting ==) `fmap` use stateField) $ addBullet
     
     -- run
-    runAutonomie enemy
-    runAutonomie bullets
+    scanAutonomies enemy
+    scanAutonomies bullets
     
     -- update
     bullets %= S.filter (\b -> b^.stateBullet /= Outside) . fmap (execState update)
@@ -44,19 +44,19 @@ instance GUIClass Field where
     f <- get
     res <- use resource
     
-    let drawEffs z = mapM_' (\e -> lift $ paint res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
+    let drawEffs z = F.mapM_ (\e -> lift $ paint res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
     
     drawEffs Background
     
     lift $ paint res `execStateT` (f^.player)
-    mapM_' (\p -> lift $ paint res `execStateT` p) (f^.bullets)
-    mapM_' (\e -> lift $ paint res `execStateT` e) (f^.enemy)
+    F.mapM_ (\p -> lift $ paint res `execStateT` p) (f^.bullets)
+    F.mapM_ (\e -> lift $ paint res `execStateT` e) (f^.enemy)
     drawEffs OnObject
 
     when (f^.isDebug) $ do
-      mapM_' (\b -> color blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
+      F.mapM_ (\b -> color blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
       (\p -> color yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
-      mapM_' (\e -> color green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
+      F.mapM_ (\e -> color green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
     
     translate (V2 320 240) $ bitmap (f^.resource^.board)
 
