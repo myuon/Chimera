@@ -30,8 +30,8 @@ stage1 = do
       aline "これによってChimeraではGameができStageが記述されDanmakuを形作っているのです。" `click`
       aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
 
-  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
-  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
+--  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
+--  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
@@ -82,9 +82,9 @@ boss1 = do
             effEnemyAttack 1 res (e^.pos),
             effEnemyAttack 2 res (e^.pos)]
   
-  let def' = pos .~ e^.pos $ angle .~ (fromIntegral $ e^.counter)/30 $ def
+  let def' = def & pos .~ e^.pos & angle .~ (fromIntegral $ e^.counter)/30
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
-    shots $ (flip map) [1..4] $ \i ->
+    shots $ (flip map) [1..4] $ \i -> 
       makeBullet $
       speed .~ 3.15 $
       angle +~ 2*pi*i/4 $
@@ -142,7 +142,7 @@ boss2 = do
             effEnemyAttack 1 res (e^.pos),
             effEnemyAttack 2 res (e^.pos)]
   
-  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
+  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
     shots $ (flip map) [0..5] $ \i ->
       makeBullet $
       pos .~ e^.pos $
@@ -151,7 +151,7 @@ boss2 = do
       bcolor .~ (toEnum $ i*2 `mod` 8) $
       runAuto %~ (\f -> go i >> f) $
       def
-  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
+  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $
     shots $ return $
       makeBullet $
       pos .~ e^.pos $
@@ -167,7 +167,7 @@ boss2 = do
       b <- self
       let t = pi/3
       let time = 50
-      when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $ do
+      when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $
         shots $ return $ def & auto .~ b & angle +~ t
       
       hook $ Left $ do
@@ -176,8 +176,7 @@ boss2 = do
         when (cnt < 200 && cnt `mod` time == 0) $ do
           speed += 1.5
           angle -= t
-        when (cnt < 200) $ do
-          speed -= (fromIntegral $ time - cnt `mod` time)/1000
+        when (cnt < 200) $ speed -= (fromIntegral $ time - cnt `mod` time)/1000
 
 boss3 :: Danmaku EnemyObject ()
 boss3 = do
@@ -187,7 +186,7 @@ boss3 = do
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
   
   let n = 8 :: Int
-  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
+  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
     shots $ (flip map) [0..n] $ \i ->
       makeBullet $
       pos .~ e^.pos $
@@ -210,7 +209,6 @@ boss3 = do
       hook $ Left $ do
         counter %= (+1)
         cnt <- use counter
-        when (cnt < 200 && cnt `mod` time == 0) $ do
-          speed += 1.5
+        when (cnt < 200 && cnt `mod` time == 0) $ speed += 1.5
         when (cnt < 200) $
           speed -= (fromIntegral $ time - cnt `mod` time)/1000

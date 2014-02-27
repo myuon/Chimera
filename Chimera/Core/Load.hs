@@ -58,9 +58,9 @@ class GetPicture c where
 
 execLoad :: Resource -> Game Resource
 execLoad res = do
-  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
-  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
-  forkFrame $ F.mapM_ (F.mapM_ preloadBitmap) $ res ^. bulletImg
+--  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
+--  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
+--  forkFrame $ F.mapM_ (F.mapM_ preloadBitmap) $ res ^. bulletImg
   return $ res
     & numbers .~ V.fromList ns
     & labels .~ M.fromList ls
@@ -68,7 +68,7 @@ execLoad res = do
   where
     ns = fmap (text (res^.font) 20 . return) "0123456789"
     ls = fmap (\x -> (x, text (res^.font) 20 x)) $
-      ["fps", "bullets", "effects", "enemies", "score", "hiscore"]
+      ["fps", "bullets", "effects", "enemies", "score", "hiscore", "hp"]
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 

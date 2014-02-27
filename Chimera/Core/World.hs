@@ -92,19 +92,6 @@ instance GUIClass Enemy where
     F.mapM_ (\e -> lift $ paint res `execStateT` e) (c^.effectEnemy)
     draw $ translate (c^.pos) $ bitmap (picture res c)
 
-instance Default Field where
-  def = Field {
-    _player = def,
-    _enemy = S.empty,
-    _bullets = S.empty,
-    _effects = S.empty,
-    
-    _resource = error "_resource is not defined.",
-    _counterF = 0,
-    _isDebug = False,
-    _stateField = Shooting
-    }
-
 actPlayer :: StateT Player Game ()
 actPlayer = do
   pairs <- lift $ mapM (\k -> (,) k `fmap` fromEnum `fmap` keyPress k) keyList
@@ -124,7 +111,7 @@ scanAutonomies :: Lens' Field (S.Seq (Autonomie (Danmaku a) a)) -> State Field (
 scanAutonomies member = do
   f <- use id
   let pairs = fmap (\c -> runDanmaku (c^.auto) f (c^.runAuto)) $ f^.member
-  member .= (
-    fmap (\(b,s) -> b & auto %~ execState s) $ S.zip (f^.member) $ fmap (\(Pair a _) -> a) pairs)
+  member .= (fmap (\(b,s) -> b & auto %~ execState s) $ 
+             S.zip (f^.member) $ fmap (\(Pair a _) -> a) pairs)
   modify $ execState $ T.mapM (\(Pair _ b) -> b) pairs
 

@@ -207,6 +207,19 @@ instance Default Player where
     _keysPlayer = M.fromList $ zip keyList [0..]
     }
 
+instance Default Field where
+  def = Field {
+    _player = def,
+    _enemy = S.empty,
+    _bullets = S.empty,
+    _effects = S.empty,
+    
+    _resource = error "_resource is not defined.",
+    _counterF = 0,
+    _isDebug = False,
+    _stateField = Shooting
+    }
+
 keyList :: [Key]
 keyList = [
   KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift,

@@ -2,7 +2,7 @@ module Chimera.Engine ( module M ) where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (get, lift, execStateT, execState, State)
+import Control.Monad.State.Strict (lift, execStateT, execState, State)
 import Data.Char (digitToInt)
 import Data.Default (def)
 import qualified Data.Sequence as S
@@ -16,91 +16,95 @@ import Chimera.Scripts as M
 
 instance GUIClass Field where
   update = do
-    res <- use resource
     counterF %= (+1)
-  
-    -- collision
+    
     collideObj
+    use resource >>= deadEnemyEffects
+    when_ ((Shooting ==) `fmap` use stateField) addBullet
     
-    -- effect
-    es <- use enemy
-    effects ><= (fmap (\e -> effEnemyDead res (e^.pos)) $ S.filter (\e -> e^.stateChara == Dead) es)
-    
-    -- append
-    f <- get
-    when_ ((Shooting ==) `fmap` use stateField) $ addBullet
-    
-    -- run
     scanAutonomies enemy
     scanAutonomies bullets
     
-    -- update
     bullets %= S.filter (\b -> b^.stateBullet /= Outside) . fmap (execState update)
     enemy %= fmap (execState update) . S.filter (\e -> e^.stateChara /= Dead)
     player %= execState update
     effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
+    
+    where
+      deadEnemyEffects res = do
+        es <- use enemy
+        effects ><= (fmap (effEnemyDead res . (^.pos)) $ 
+                     S.filter ((== Dead) . (^.stateChara)) es)
       
   paint _ = do
-    f <- get
-    res <- use resource
-    
-    let drawEffs z = F.mapM_ (\e -> lift $ paint res `execStateT` e) $ S.filter (\r -> (r^.zIndex) == z) (f^.effects)
-    
     drawEffs Background
-    
-    lift $ paint res `execStateT` (f^.player)
-    F.mapM_ (\p -> lift $ paint res `execStateT` p) (f^.bullets)
-    F.mapM_ (\e -> lift $ paint res `execStateT` e) (f^.enemy)
+    drawObj
     drawEffs OnObject
-
-    when (f^.isDebug) $ do
-      F.mapM_ (\b -> color blue . polygon $ boxVertexRotated (b^.pos) (b^.size) (b^.angle)) (f ^. bullets)
-      (\p -> color yellow . polygon $ boxVertex (p^.pos) (p^.size)) $ f^.player
-      F.mapM_ (\e -> color green . polygon $ boxVertex (e^.pos) (e^.size)) (f ^. enemy)
-    
-    translate (V2 320 240) $ bitmap (f^.resource^.board)
-
-    fps <- lift $ getFPS
-    lift $ translate (V2 430 30) $ (f^.resource^.labels) M.! "fps"
-    lift $ drawScore (f^.resource) fps 30
-
-    lift $ translate (V2 430 50) $ (f^.resource^.labels) M.! "score"
-    lift $ drawScore (f^.resource) (f^.counterF) 50
-
-    lift $ translate (V2 430 70) $ (f^.resource^.labels) M.! "hiscore"
-    lift $ drawScore (f^.resource) 0 70
-
-
-    lift $ translate (V2 430 120) $ (f^.resource^.labels) M.! "bullets"
-    lift $ drawScore (f^.resource) (S.length $ f^.bullets) 120
-
-    lift $ translate (V2 430 140) $ (f^.resource^.labels) M.! "enemies"
-    lift $ drawScore (f^.resource) (S.length $ f^.enemy) 140
-
-    lift $ translate (V2 430 160) $ (f^.resource^.labels) M.! "effects"
-    lift $ drawScore (f^.resource) (S.length $ f^.effects) 160 
-
+    when_ (use isDebug) debugging
+    translate (V2 320 240) . bitmap =<< use (resource.board)
+    drawMessages
     drawEffs Foreground
+    
+    where
+      drawObj = do
+        res <- use resource
+        _ <- lift . execStateT (paint res) =<< use player
+        F.mapM_ (lift . execStateT (paint res)) =<< use bullets
+        F.mapM_ (lift . execStateT (paint res)) =<< use enemy
+      
+      drawEffs z = do
+        res <- use resource
+        F.mapM_ (lift . execStateT (paint res)) . S.filter (\r -> r^.zIndex == z)
+          =<< use effects
+      
+      debugging = do
+        F.mapM_ (\b -> color blue . polygon $ 
+                       boxVertexRotated (b^.pos) (b^.size) (b^.angle)) =<< use bullets
+        _ <- (\p -> color yellow . polygon $ 
+                    boxVertex (p^.pos) (p^.size)) =<< use player
+        F.mapM_ (\e -> color green . polygon $ 
+                       boxVertex (e^.pos) (e^.size)) =<< use enemy
+      
+      drawMessages = do
+        ls <- use (resource.labels)
+        
+        lift $ translate (V2 430 30) $ ls M.! "fps"
+        drawScore 30 =<< getFPS
 
-drawScore :: Resource -> Int -> Double -> Game ()
-drawScore res sc y = do
-  forM_ (zip (show sc) [1..]) $ \(n, i) -> 
-    translate (V2 (550 + i*13) y) $ (res^.numbers) V.! (digitToInt n)
+        lift $ translate (V2 430 50) $ ls M.! "score"
+        drawScore 50 =<< use counterF
+
+        lift $ translate (V2 430 70) $ ls M.! "hiscore"
+        drawScore 70 (0 :: Int)
+
+        lift $ translate (V2 430 90) $ ls M.! "hp"
+        drawScore 90 =<< use (player.hp)
+
+        lift $ translate (V2 430 170) $ ls M.! "bullets"
+        drawScore 170 . S.length =<< use bullets
+
+        lift $ translate (V2 430 190) $ ls M.! "enemies"
+        drawScore 190 . S.length =<< use enemy
+
+        lift $ translate (V2 430 210) $ ls M.! "effects"
+        drawScore 210 . S.length =<< use effects
+
+      drawScore y sc = do
+        nums <- use (resource.numbers)
+        forM_ (zip (show sc) [1..]) $ \(n, i) -> 
+          lift $ translate (V2 (550 + i*13) y) $ nums V.! digitToInt n
 
 collideObj :: State Field ()
 collideObj = do
   p <- use player
-  es <- use enemy
-  bs <- use bullets
-  
   res <- use resource
   let run' = run (createEffect res)
   
-  let (n, bs') = runPair PlayerB p bs
+  (n, bs') <- return . runPair PlayerB p =<< use bullets
   player %= (hp -~ n)
   when (n>0) $ effects %= (S.|> effPlayerDead res (p^.pos))
   
-  let (es', bs'', _) = run' EnemyB es bs'
+  (es', bs'', _) <- (\es -> return $ run' EnemyB es bs') =<< use enemy
   enemy .= es'
   bullets .= bs''
   -- effects %= (effEnemyDamaged ...)
@@ -115,11 +119,12 @@ collideObj = do
     run :: (HasChara c, HasObject c) => 
            (StateBullet -> c -> Effect) -> StateBullet -> S.Seq c -> S.Seq Bullet -> 
            (S.Seq c, S.Seq Bullet, S.Seq Effect)
-    run eff s es bs = go s (S.viewl es) bs where
-      go _ S.EmptyL bs = (S.empty, bs, S.empty)
-      go s (e S.:< es) bs = 
-        let (n, bs') = runPair s e bs; (es', bs'', ps) = run eff s es bs' in
-        (es' S.|> (e & hp -~ n), bs'', bool id (S.|> (eff s e)) (n>0) $ ps)
+    run eff s cseq bs = iter (S.viewl cseq) (S.empty, bs, S.empty) where
+      iter S.EmptyL acc = acc
+      iter (h S.:< rest) (cs, bs, es) = iter (S.viewl rest) (cs', bs', es') where
+        (n, bs') = runPair s h bs
+        cs' = (h & hp -~ n) S.<| cs
+        es' = if n>0 then es else es S.|> eff s h
     
     createEffect :: (HasChara c, HasObject c) => 
                     Resource -> StateBullet -> c -> Effect
@@ -129,17 +134,20 @@ collideObj = do
       
 addBullet :: State Field ()
 addBullet = do
-  p <- use player
-  when ((p^.keysPlayer) M.! (charToKey 'Z') > 0 && p^.counter `mod` 10 == 0) $ do
+  keys <- use (player.keysPlayer)
+  cnt <- use (player.counter)
+  when (keys M.! charToKey 'Z' > 0 && cnt `mod` 10 == 0) $ do
+    p <- use (player.pos)
     bullets ><= (S.fromList
-      [def' & pos .~ (p^.pos) + V2 5 0,
-       def' & pos .~ (p^.pos) + V2 15 0,
-       def' & pos .~ (p^.pos) - V2 5 0,
-       def' & pos .~ (p^.pos) - V2 15 0])
+      [def' & pos .~ p + V2 5 0,
+       def' & pos .~ p + V2 15 0,
+       def' & pos .~ p - V2 5 0,
+       def' & pos .~ p - V2 15 0])
   
-  when ((p^.keysPlayer) M.! (charToKey 'X') > 0 && p^.counter `mod` 20 == 0) $ do
+  when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0) $ do
+    p <- use (player.pos)
     res <- use resource
-    bullets ><= (S.singleton $ chaosBomb res (p^.pos))
+    bullets ><= (S.singleton $ chaosBomb res $ p)
   
   where
     def' :: Bullet

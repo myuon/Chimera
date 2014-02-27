@@ -48,7 +48,7 @@ loadloop :: GameLoop ()
 loadloop = do
   font' <- use (field.resource.font)
   field.resource <~ (lift . execLoad =<< use (field.resource))
-  lift $ waiting font' 0
+--  lift $ waiting font' 0
 
   running .= stgloop
   where
@@ -56,7 +56,7 @@ loadloop = do
     waiting font' n = do
       translate (V2 30 30) . color white . text font' 20 $ "読み込み中…" ++ show n
       tick
-      when (n < 1) $ waiting font' $ n+1
+      when (n > 0) $ waiting font' $ n-1
 
 stgloop :: GameLoop ()
 stgloop = do
