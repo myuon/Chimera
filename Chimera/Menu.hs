@@ -7,6 +7,7 @@ import Data.Default
 import Control.Monad.State.Strict
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.Foldable as F
 
 import Chimera.Core.Util
 
@@ -86,9 +87,14 @@ marf = M.fromList [
 posloop :: Font -> StateT SelectMap Game (Maybe String)
 posloop font = do
   (s,p) <- use pointing2
+  m <- use mapinfo
+  
+  forM_ (wires s m) $ \(x,y) ->
+    color white . thickness 2 . line $ [x,y]
+
+  translate (p + 3) . color (Color 0.4 0.4 0.4 1.0) . text font 20 $ s
   translate p . color white . text font 20 $ s
   
-  m <- use mapinfo
   let keyMap = snd $ m M.! s
   forM_ [KeyUp, KeyRight, KeyDown, KeyLeft] $ \k ->
     when_ (keyDown k) $ case k `M.lookup` keyMap of
@@ -100,3 +106,8 @@ posloop font = do
   case z of
     True -> return $ Just s
     False -> return Nothing
+  
+  where
+    wires :: String -> MapInfo -> [(Vec2, Vec2)]
+    wires s m = let (p,ps) = m M.! s in
+      F.toList $ fmap ((,) p . fst . (m M.!)) $ ps

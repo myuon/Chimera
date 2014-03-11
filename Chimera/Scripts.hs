@@ -14,6 +14,7 @@ module Chimera.Scripts (
   , chaosBomb
   , liftTalk, say', character, say, delCharacter
   , stageTest
+  , setName
   , module M
   ) where
 
@@ -154,6 +155,7 @@ zakoCommon _ mot time bk c = do
 
 debug :: Danmaku EnemyObject ()
 debug = do
+  setName "デバッグ用弾幕"
   e <- self
   hook $ Left $ motionCommon 100 Stay  
   let cnt = e ^. counter
@@ -318,3 +320,6 @@ stageTest = do
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallFrame Red
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 Needle Red
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallTiny Red
+
+setName :: String -> Danmaku c ()
+setName s = hook $ Right $ danmakuTitle .= s

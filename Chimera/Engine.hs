@@ -17,6 +17,7 @@ import Chimera.Scripts as M
 instance GUIClass Field where
   update = do
     counterF %= (+1)
+    danmakuTitle .= ""
     
     collideObj
     use resource >>= deadEnemyEffects
@@ -44,6 +45,7 @@ instance GUIClass Field where
     translate (V2 320 240) . bitmap =<< use (resource.board)
     drawMessages
     drawEffs Foreground
+    when_ ((/= "") `fmap` use danmakuTitle) drawTitle
     
     where
       drawObj = do
@@ -93,6 +95,10 @@ instance GUIClass Field where
         nums <- use (resource.numbers)
         forM_ (zip (show sc) [1..]) $ \(n, i) -> 
           lift $ translate (V2 (550 + i*13) y) $ nums V.! digitToInt n
+      
+      drawTitle = do
+        font' <- use (resource.font)
+        translate (V2 40 30) . text font' 10 =<< use danmakuTitle
 
 collideObj :: State Field ()
 collideObj = do

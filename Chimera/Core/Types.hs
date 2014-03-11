@@ -102,7 +102,8 @@ data Field = Field {
   _resource :: Resource,
   _counterF :: Int,
   _isDebug :: Bool,
-  _stateField :: StateField
+  _stateField :: StateField,
+  _danmakuTitle :: String
   }
 
 type LookAt p q = Program (Pattern p q)
@@ -217,7 +218,8 @@ instance Default Field where
     _resource = error "_resource is not defined.",
     _counterF = 0,
     _isDebug = False,
-    _stateField = Shooting
+    _stateField = Shooting,
+    _danmakuTitle = ""
     }
 
 keyList :: [Key]

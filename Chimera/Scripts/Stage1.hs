@@ -31,7 +31,7 @@ stage1 = do
       aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
 
 --  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
---  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
+  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
@@ -73,6 +73,8 @@ zako n
 
 boss1 :: Danmaku EnemyObject ()
 boss1 = do
+  setName "分裂弾"
+  
   e <- self
   hook $ Left $ motionCommon 100 Stay
   res <- getResource
@@ -132,6 +134,8 @@ boss1 = do
 
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
+  setName "回転弾"
+  
   e <- self
   hook $ Left $ motionCommon 100 Stay
   res <- getResource
