@@ -8,7 +8,6 @@ module Chimera.Layers (
   ) where
 
 import FreeGame
-import FreeGame.Data.Bitmap (bitmapSize)
 import Control.Lens
 import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))

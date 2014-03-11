@@ -84,12 +84,9 @@ instance GUIClass Enemy where
     counter %= (+1)
     h <- use hp
     when (h <= 0) $ stateChara .= Dead
-    effectEnemy %= 
-      S.filter (\e -> e^.stateEffect /= Inactive) . fmap (\e -> update `execState` e)
   
   paint res = do
     c <- get
-    F.mapM_ (\e -> lift $ paint res `execStateT` e) (c^.effectEnemy)
     draw $ translate (c^.pos) $ bitmap (picture res c)
 
 actPlayer :: StateT Player Game ()

@@ -8,6 +8,7 @@ import Data.Default (def)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.IntMap as IM
 import qualified Data.Foldable as F
 
 import Chimera.Core.Load as M
@@ -29,13 +30,17 @@ instance GUIClass Field where
     bullets %= S.filter (\b -> b^.stateBullet /= Outside) . fmap (execState update)
     enemy %= fmap (execState update) . S.filter (\e -> e^.stateChara /= Dead)
     player %= execState update
-    effects %= S.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
+    effects %= IM.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
     
     where
+      deadEnemies = S.filter ((== Dead) . (^.stateChara))
+      
       deadEnemyEffects res = do
-        es <- use enemy
-        effects ><= (fmap (effEnemyDead res . (^.pos)) $ 
-                     S.filter ((== Dead) . (^.stateChara)) es)
+        ds <- deadEnemies `fmap` use enemy
+        F.forM_ ds $ \e -> do
+          effects %= insertIM (effEnemyDead res $ e^.pos)
+          F.forM_ (e^.effectIndexes) $ \i ->
+            effects %= IM.adjust (execState $ stateEffect .= Inactive) i
       
   paint _ = do
     drawEffs Background
@@ -56,7 +61,7 @@ instance GUIClass Field where
       
       drawEffs z = do
         res <- use resource
-        F.mapM_ (lift . execStateT (paint res)) . S.filter (\r -> r^.zIndex == z)
+        F.mapM_ (lift . execStateT (paint res)) . IM.filter (\r -> r^.zIndex == z)
           =<< use effects
       
       debugging = do
@@ -89,12 +94,13 @@ instance GUIClass Field where
         drawScore 190 . S.length =<< use enemy
 
         lift $ translate (V2 430 210) $ ls M.! "effects"
-        drawScore 210 . S.length =<< use effects
+        drawScore 210 . IM.size =<< use effects
 
       drawScore y sc = do
         nums <- use (resource.numbers)
-        forM_ (zip (show sc) [1..]) $ \(n, i) -> 
-          lift $ translate (V2 (550 + i*13) y) $ nums V.! digitToInt n
+        forM_ (zip (show $ maximum [sc, 0]) [1..]) $ \(n, i) -> 
+          when (n /= '-') $
+            lift $ translate (V2 (550 + i*13) y) $ nums V.! digitToInt n
       
       drawTitle = do
         font' <- use (resource.font)
@@ -108,7 +114,7 @@ collideObj = do
   
   (n, bs') <- return . runPair PlayerB p =<< use bullets
   player %= (hp -~ n)
-  when (n>0) $ effects %= (S.|> effPlayerDead res (p^.pos))
+  when (n>0) $ effects %= (insertIM $ effPlayerDead res (p^.pos))
   
   (es', bs'', _) <- (\es -> return $ run' EnemyB es bs') =<< use enemy
   enemy .= es'

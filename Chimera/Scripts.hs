@@ -20,16 +20,17 @@ module Chimera.Scripts (
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (get, State)
+import Control.Monad.State.Strict (get, modify, State, execState)
 import Control.Monad.Operational.Mini
 import Data.Monoid ((<>))
 import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
+import qualified Data.IntMap as IM
+import Data.Functor.Product
 
 import Chimera.Core.World
 import Chimera.Layers as M
-
 
 data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
@@ -78,9 +79,10 @@ keeper e = (singleton . AppearEnemy) e >> singleton Stop
 
 addEffect :: Effect -> Stage Int
 addEffect e = do
-  f <- singleton GetField
-  singleton . LiftField $ effects %= (S.|> e)
-  return $ S.length $ f^.effects
+  m <- (^.effects) `fmap` singleton GetField
+  let (n,m') = insertIM' e m
+  singleton . LiftField $ effects .= m'
+  return n
 
 -- APIs for Danmaku Monad
 getPlayer :: Danmaku c Player
@@ -90,10 +92,15 @@ shots :: [Bullet] -> Danmaku c ()
 shots bs = hook $ Right $ bullets ><= S.fromList bs
 
 effs :: [Effect] -> Danmaku EnemyObject ()
-effs es = hook $ Left $ effectEnemy ><= S.fromList es
+effs es = forM_ es $ \e -> do  
+  m <- (^.effects) `fmap` env
+  let (n, m') = insertIM' e m
+  hook $ Left $ effectIndexes %= (S.|> n)
+  hook $ Right $ effects .= m'
 
 globalEffs :: [Effect] -> Danmaku c ()
-globalEffs es = hook $ Right $ effects ><= S.fromList es
+globalEffs es = hook $ Right $ 
+  forM_ es $ \e -> effects %= insertIM e
 
 initEnemy :: Vec2 -> Int -> Enemy
 initEnemy p h =
@@ -286,7 +293,7 @@ liftTalk m = do
   singleton $ Talk
   m
   singleton $ Endtalk
-  liftField $ effects .= S.empty
+  liftField $ effects .= IM.empty
   
 say' :: Expr -> Stage ()
 say' m = singleton . Speak $ m <> clickend
@@ -301,13 +308,13 @@ character n p = addEffect $ effFadeIn 30 $ eff where
         & runAuto .~ (counter %= (+1))
 
 delCharacter :: Int -> Stage ()
-delCharacter c = liftField $ effects %= S.adjust (effFadeOut 30) c
+delCharacter c = liftField $ effects %= IM.adjust (effFadeOut 30) c
 
 say :: Int -> Expr -> Stage ()
 say c m = do
-  liftField $ effects %= S.adjust (moveSmooth (V2 (-80) 0) 50) c
+  liftField $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
   singleton . Speak $ m <> clickend
-  liftField $ effects %= S.adjust (moveSmooth (V2 80 0) 50) c
+  liftField $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
   
 stageTest :: Stage ()
 stageTest = do

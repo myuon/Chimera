@@ -10,6 +10,7 @@ import Control.Monad.State.Strict (State, StateT)
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.IntMap as IM
 import Data.Default
 import Data.Functor.Product
 
@@ -85,7 +86,7 @@ data BulletObject = BulletObject {
 
 data EnemyObject = EnemyObject {
   _charaEnemy :: Chara,
-  _effectEnemy :: S.Seq Effect
+  _effectIndexes :: S.Seq Int
   }
 
 data Player = Player {
@@ -97,7 +98,7 @@ data Field = Field {
   _player :: Player,
   _enemy :: S.Seq Enemy,
   _bullets :: S.Seq Bullet,
-  _effects :: S.Seq Effect,
+  _effects :: IM.IntMap Effect,
   
   _resource :: Resource,
   _counterF :: Int,
@@ -194,7 +195,7 @@ instance Default EnemyObject where
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
       def,
-    _effectEnemy = S.empty
+    _effectIndexes = S.empty
     }
 
 instance Default Player where
@@ -213,7 +214,7 @@ instance Default Field where
     _player = def,
     _enemy = S.empty,
     _bullets = S.empty,
-    _effects = S.empty,
+    _effects = IM.empty,
     
     _resource = error "_resource is not defined.",
     _counterF = 0,

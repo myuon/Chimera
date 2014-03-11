@@ -12,7 +12,6 @@ import FreeGame
 import Control.Lens
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import qualified Data.Foldable as F
 
 import Chimera.Core.Util
 import Chimera.Core.Types
