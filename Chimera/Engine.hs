@@ -1,4 +1,4 @@
-module Chimera.Engine ( module M ) where
+module Chimera.Engine ( module M, addBullet ) where
 
 import FreeGame
 import Control.Lens
@@ -22,7 +22,6 @@ instance GUIClass Field where
     
     collideObj
     use resource >>= deadEnemyEffects
-    when_ ((Shooting ==) `fmap` use stateField) addBullet
     
     scanAutonomies enemy
     scanAutonomies bullets

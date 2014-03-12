@@ -4,7 +4,6 @@ module Chimera where
 import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict
-import Control.Monad.Operational.Mini
 import Data.Maybe (isJust)
 import Data.Default (def)
 import qualified Data.Vector as V
@@ -18,6 +17,7 @@ type GameLoop = StateT GameFrame Game
 data GameFrame = GameFrame {
   _running :: GameLoop (),
   _stage :: Stage (),
+  _controller :: Controller,
   _field :: Field,
   _menu :: Select GameLoop,
   _mapMenu :: SelectMap,
@@ -60,32 +60,40 @@ loadloop = do
 
 stgloop :: GameLoop ()
 stgloop = do
-  gf <- get
-
-  _ <- lift $ paint (error "_") `execStateT` (gf ^. field)
-  field.player `zoom` actPlayer
+  use field >>= \f -> lift $ paint (error "_") `execStateT` f
+  
+  _ <- do
+    field.player `zoom` actPlayer
+    when_ (isShooting `fmap` use controller) $ 
+      field %= execState addBullet
   field %= execState update
-  when_ ((Talking ==) `fmap` (use $ field . stateField)) $ running .= talkloop
-  when_ ((Shooting ==) `fmap` (use $ field . stateField)) $ do
-    g <- get
-    let (s', f') = runStage (g^.stage) `runState` (g^.field)
-    field .= f'
-    stage .= s'
+  use controller >>= \r -> case isShooting r of 
+    True -> do
+      g <- get
+      let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
+      field .= g'
+      stage .= s'
+      controller .= c'
+    False -> running .= talkloop
   
 talkloop :: GameLoop ()
 talkloop = do
   stgloop
   
-  me <- use mEngine
-  f <- use field
-  _ <- lift $ paint (f^.resource) `execStateT` me
+  _ <- do
+    me <- use mEngine
+    res <- use (field.resource)
+    lift $ paint res `execStateT` me
   mEngine %= execState update
   
   when_ ((== End) `fmap` use (mEngine.stateEngine)) $ do
-    g <- get
-    let (s', g') = runTalk (g^.stage) `runState` g
-    put g'
+    g <- use id
+    let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
+    field .= g'
     stage .= s'
+    controller .= c'
+    
+    use controller >>= \c -> id %= execState (runTalk c)
   when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ 
     when_ (keyChar 'Z') $ mEngine.stateEngine .= Parsing
   when_ (keyPress KeyLeftControl) $ do
@@ -96,18 +104,15 @@ talkloop = do
       mEngine.cursor .= (length p - 1)
   
   where
-    runTalk :: Stage () -> State GameFrame (Stage ())
-    runTalk (Speak s :>>= next) = do
+    runTalk :: Controller -> State GameFrame ()
+    runTalk Talk = mEngine.stateEngine .= End
+    runTalk (Speak s) = do
       mEngine.stateEngine .= Parsing
       mEngine.message .= s
-      return (next ())
-    runTalk (Endtalk :>>= next) = do
+    runTalk Go = do
       field.stateField .= Shooting
       running .= stgloop
-      return (next ())
-    runTalk (LiftField f :>>= next) = field %= execState f >> return (next ())
-    runTalk (GetField :>>= next) = next `fmap` use field
-    runTalk u = return u
+    runTalk _ = return ()
 
 game :: IO (Maybe ())
 game = runGame Windowed (BoundingBox 0 0 640 480) $ do
@@ -128,6 +133,7 @@ game = runGame Windowed (BoundingBox 0 0 640 480) $ do
                       _mapMenu = def,
                       _mEngine = def,
                       _stage = stage1,
+                      _controller = Go,
                       _running = menuloop, 
                       _quit = False } where
     mainloop :: GameLoop ()

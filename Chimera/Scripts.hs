@@ -1,8 +1,8 @@
 {-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
-{-# LANGUAGE TypeOperators, DataKinds #-}
+{-# LANGUAGE TypeOperators, DataKinds, Rank2Types #-}
 module Chimera.Scripts (
-  Line(..), Stage, runStage
+  Controller(..), Stage, runStage, isShooting
   , appearAt, keeper
   , getPlayer, shots, effs, globalEffs, wait
   , initEnemy
@@ -12,7 +12,7 @@ module Chimera.Scripts (
   , debug
   , effEnemyDead, effPlayerDead, effEnemyStart, effEnemyAttack
   , chaosBomb
-  , liftTalk, say', character, say, delCharacter
+  , talk, say', character, say, delCharacter
   , stageTest
   , setName
   , module M
@@ -20,8 +20,8 @@ module Chimera.Scripts (
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (get, modify, State, execState)
-import Control.Monad.Operational.Mini
+import Control.Monad.State.Strict
+import Control.Monad.Reader (ask, runReader, Reader)
 import Data.Monoid ((<>))
 import Data.Default (def)
 import qualified Data.Vector as V
@@ -32,57 +32,93 @@ import Data.Functor.Product
 import Chimera.Core.World
 import Chimera.Layers as M
 
+data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
-data Line p where
-  AppearEnemy :: Enemy -> Line ()
-  LiftField :: State Field () -> Line ()
-  GetField :: Line Field
-  Wait :: Int -> Line ()
-  Stop :: Line ()
-  Talk :: Line ()
-  Speak :: Expr -> Line ()
-  Endtalk :: Line ()
+type Stage = ReifiedLookAt Controller Field
 
-type Stage = ReifiedProgram Line
-instance HasGetResource Stage where
-  getResource = (^.resource) `fmap` singleton GetField
+runStage :: Controller -> Stage () -> State Field (Controller, Stage ())
+runStage ctrl stg = do
+  ctrl <- runReader (runController ctrl) `fmap` use id
+  case isStageRunning ctrl of
+    True -> do
+      (k, f') <- tickStage `fmap` use id
+      id .= f'
+      return k
+    False -> return (ctrl, stg)
+  
+  where
+    run p q m = runLookAt' p q m `runState` Pair (return ()) (return ())
+    
+    tickStage field = let (stg', Pair f g) = run ctrl field stg in
+      ((f `execState` ctrl, stg'), g `execState` field)
 
-runStage :: Stage () -> State Field (Stage ())
-runStage (AppearEnemy e :>>= next) = enemy %= (S.|> e) >> return (next ())
-runStage (Wait n :>>= next) =
-  case n == 0 of
-    True -> return (next ())
-    False -> return (Wait (n-1) :>>= next)
-runStage u@(Stop :>>= next) = do
-  es <- use enemy
-  case S.length es == 0 of
-    True -> return (next ())
-    False -> return u
-runStage (Talk :>>= next) = stateField .= Talking >> return (next ())
-runStage (LiftField f :>>= next) = f >> return (next ())
-runStage (GetField :>>= next) = next `fmap` get
-runStage u = return u
+runController :: Controller -> Reader Field Controller
+runController (Wait n) = case n == 0 of
+  True -> return Go
+  False -> return $ Wait (n-1)
+runController Stop = do
+  es <- (S.length . (^.enemy)) `fmap` ask
+  case es == 0 of
+    True -> return Go
+    False -> return Stop
+runController Go = return Go
+runController u = return u
+
+isShooting :: Controller -> Bool
+isShooting (Speak _) = False
+isShooting Talk = False
+isShooting _ = True
+
+isStageRunning :: Controller -> Bool
+isStageRunning Stop = False
+isStageRunning (Wait _) = False
+isStageRunning _ = True
 
 -- APIs for Stage Monad
-liftField :: State Field () -> Stage ()
-liftField = singleton . LiftField
+appearEnemy :: Enemy -> Stage ()
+appearEnemy e = hook $ Right $ enemy %= (S.|> e)
 
 wait :: Int -> Stage ()
-wait = singleton . Wait
-                                    
+wait n = do
+  hook $ Left $ id .= Wait n
+  yield
+
+stop :: Stage ()
+stop = do
+  hook $ Left $ id .= Stop
+  yield
+
 appearAt :: Int -> Enemy -> Stage ()
-appearAt n e = wait n >> (singleton . AppearEnemy) e
+appearAt n e = wait n >> appearEnemy e
 
 keeper :: Enemy -> Stage ()
-keeper e = (singleton . AppearEnemy) e >> singleton Stop
+keeper e = appearEnemy e >> stop
 
 addEffect :: Effect -> Stage Int
 addEffect e = do
-  m <- (^.effects) `fmap` singleton GetField
+  m <- (^.effects) `fmap` env
   let (n,m') = insertIM' e m
-  singleton . LiftField $ effects .= m'
+  hook $ Right $ effects .= m'
   return n
+
+speak :: Expr -> Stage ()
+speak expr = do
+  hook $ Left $ id .= Speak expr
+  yield
+
+talk :: Stage () -> Stage ()
+talk m = do
+  startTalk
+  yield
+  m
+  endTalk
+  yield
+  hook $ Right $ effects .= IM.empty
+  
+  where
+    startTalk = hook $ Left $ id .= Talk
+    endTalk = hook $ Left $ id .= Go
 
 -- APIs for Danmaku Monad
 getPlayer :: Danmaku c Player
@@ -288,15 +324,8 @@ chaosBomb res p =
       go e = let ratio = (b^.size^._x) / 120 in
         e & size .~ V2 ratio ratio & slowRate .~ 3
 
-liftTalk :: Stage () -> Stage ()
-liftTalk m = do
-  singleton $ Talk
-  m
-  singleton $ Endtalk
-  liftField $ effects .= IM.empty
-  
 say' :: Expr -> Stage ()
-say' m = singleton . Speak $ m <> clickend
+say' m = speak $ m <> clickend
 
 character :: Int -> Vec2 -> Stage Int
 character n p = addEffect $ effFadeIn 30 $ eff where
@@ -308,13 +337,13 @@ character n p = addEffect $ effFadeIn 30 $ eff where
         & runAuto .~ (counter %= (+1))
 
 delCharacter :: Int -> Stage ()
-delCharacter c = liftField $ effects %= IM.adjust (effFadeOut 30) c
+delCharacter c = hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
 
 say :: Int -> Expr -> Stage ()
 say c m = do
-  liftField $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
-  singleton . Speak $ m <> clickend
-  liftField $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
+  hook $ Right $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
+  speak $ m <> clickend
+  hook $ Right $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
   
 stageTest :: Stage ()
 stageTest = do

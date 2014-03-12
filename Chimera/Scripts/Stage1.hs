@@ -13,7 +13,7 @@ import Chimera.Scripts
 
 stage1 :: Stage ()
 stage1 = do
-  liftTalk $ do
+  talk $ do
     say' $ aline "ルーフェはお母さんからおつかいを頼まれました。"
     lufe <- character 0 $ V2 500 300
     say lufe $ 

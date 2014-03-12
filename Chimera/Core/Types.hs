@@ -4,9 +4,9 @@ module Chimera.Core.Types where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini (Program, interpret)
+import Control.Monad.Operational.Mini
 import Control.Monad.Operational.TH (makeSingletons)
-import Control.Monad.State.Strict (State, StateT)
+import Control.Monad.State.Strict
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
@@ -40,6 +40,7 @@ data Pattern p q x where
   Hook :: Either (State p ()) (State q ()) -> Pattern p q ()
   Self :: Pattern p q p
   Env :: Pattern p q q
+  Yield :: Pattern p q ()
 
 data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
@@ -112,6 +113,7 @@ type Danmaku c = LookAt c Field
 type Effect = Autonomie (State EffectObject) EffectObject
 type Bullet = Autonomie (Danmaku BulletObject) BulletObject
 type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
+type ReifiedLookAt p q = ReifiedProgram (Pattern p q)
 
 makeSingletons ''Pattern 
 makeLenses ''Resource
@@ -235,6 +237,17 @@ runLookAt p q = interpret (step p q) where
   step _ _ (Hook (Right f)) = Pair (return ()) f
   step p _ Self = Pair (return p) (return p)
   step _ q Env = Pair (return q) (return q)
+  step _ _ Yield = Pair (return ()) (return ())
+
+runLookAt' :: p -> q -> ReifiedLookAt p q () -> 
+              State (Product (State p) (State q) ()) (ReifiedLookAt p q ())
+runLookAt' p q = go where
+  go (Hook (Left f) :>>= next) = modify (>> Pair f (return ())) >> go (next ())
+  go (Hook (Right g) :>>= next) = modify (>> Pair (return ()) g) >> go (next ())
+  go (Self :>>= next) = get >>= \(Pair f _) -> go (next $ f `execState` p)
+  go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
+  go (Yield :>>= next) = return (next ())
+  go (Return next) = return (Return next)
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
 collide oc ob = case ob^.speed > ob^.size^._x || ob^.speed > ob^.size^._y of
