@@ -66,7 +66,7 @@ zako n
 
 boss1 :: Danmaku EnemyObject ()
 boss1 = do
-  setName "分裂弾"
+  setName "回転弾"
   
   e <- self
   hook $ Left $ motionCommon 100 Stay
@@ -128,7 +128,7 @@ boss1 = do
 
 boss2 :: Danmaku EnemyObject ()
 boss2 = do
-  setName "回転弾"
+  setName "分裂弾"
   
   e <- self
   hook $ Left $ motionCommon 100 Stay
@@ -187,6 +187,7 @@ boss3 = do
     res <- getResource
     enemyEffect $ effEnemyAttack 0 res (e^.pos)
     enemyEffect $ effEnemyAttack 1 res (e^.pos)
+    enemyEffect $ effEnemyAttack 2 res (e^.pos)
   
   let n = 8 :: Int
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $

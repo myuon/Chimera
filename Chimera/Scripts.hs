@@ -28,7 +28,7 @@ import Chimera.Layers as M
 
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 
-type Stage = ReifiedLookAt Controller Field
+type Stage = LookAt Controller Field
 
 runStage :: Controller -> Stage () -> State Field (Controller, Stage ())
 runStage ctrl stg = do
@@ -41,7 +41,7 @@ runStage ctrl stg = do
     False -> return (ctrl, stg)
   
   where
-    run p q m = runLookAt' p q m `runState` Pair (return ()) (return ())
+    run p q m = runLookAt p q m `runState` Pair (return ()) (return ())
     
     tickStage field = let (stg', Pair f g) = run ctrl field stg in
       ((f `execState` ctrl, stg'), g `execState` field)

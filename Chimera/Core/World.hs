@@ -102,7 +102,7 @@ makeBullet :: (HasObject c, HasBulletObject c) => c -> c
 makeBullet b = b & size .~ areaBullet (b^.kind)
 
 runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
-runDanmaku = runLookAt
+runDanmaku = runLookAtAll
 
 scanAutonomies :: Lens' Field (S.Seq (Autonomie (Danmaku a) a)) -> State Field ()
 scanAutonomies member = do

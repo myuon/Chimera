@@ -106,12 +106,11 @@ data Field = Field {
   _danmakuTitle :: String
   }
 
-type LookAt p q = Program (Pattern p q)
+type LookAt p q = ReifiedProgram (Pattern p q)
 type Danmaku c = LookAt c Field
 type Effect = Autonomie (State EffectObject) EffectObject
 type Bullet = Autonomie (Danmaku BulletObject) BulletObject
 type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
-type ReifiedLookAt p q = ReifiedProgram (Pattern p q)
 
 makeSingletons ''Pattern 
 makeLenses ''Resource
@@ -227,24 +226,24 @@ keyList = [
   KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift,
   charToKey 'Z', charToKey 'X']
 
-runLookAt :: p -> q -> LookAt p q a -> Product (State p) (State q) a
-runLookAt p q = interpret (step p q) where
-  step :: p -> q -> Pattern p q a -> Product (State p) (State q) a
-  step _ _ (Hook (Left f)) = Pair f (return ())
-  step _ _ (Hook (Right f)) = Pair (return ()) f
-  step p _ Self = return p
-  step _ q Env = return q
-  step _ _ Yield = Pair (return ()) (return ())
-
-runLookAt' :: p -> q -> ReifiedLookAt p q () -> 
-              State (Product (State p) (State q) ()) (ReifiedLookAt p q ())
-runLookAt' p q = go where
+runLookAt :: p -> q -> LookAt p q () -> 
+             State (Product (State p) (State q) ()) (LookAt p q ())
+runLookAt p q = go where
   go (Hook (Left f) :>>= next) = modify (>> Pair f (return ())) >> go (next ())
   go (Hook (Right g) :>>= next) = modify (>> Pair (return ()) g) >> go (next ())
   go (Self :>>= next) = get >>= \(Pair f _) -> go (next $ f `execState` p)
   go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
   go (Yield :>>= next) = return (next ())
   go (Return next) = return (Return next)
+
+runLookAtAll :: p -> q -> LookAt p q () -> Product (State p) (State q) ()
+runLookAtAll p q m = go m `execState` return () where
+  go (Hook (Left f) :>>= next) = modify (>> Pair f (return ())) >> go (next ())
+  go (Hook (Right g) :>>= next) = modify (>> Pair (return ()) g) >> go (next ())
+  go (Self :>>= next) = get >>= \(Pair f _) -> go (next $ f `execState` p)
+  go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
+  go (Yield :>>= next) = go (next ())
+  go (Return _) = return ()
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
 collide oc ob = case ob^.speed > ob^.size^._x || ob^.speed > ob^.size^._y of
