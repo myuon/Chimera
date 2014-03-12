@@ -10,7 +10,7 @@ import Control.Monad.State.Strict
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import qualified Data.IntMap as IM
+import qualified Data.IntMap.Strict as IM
 import Data.Default
 import Data.Functor.Product
 
@@ -27,7 +27,6 @@ class Autonomic c m a | c -> a, c -> m where
   runAuto = autonomie . (\f (Autonomie a r) -> (\r' -> Autonomie a r') `fmap` f r)
 
 data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
-data StateField = Shooting | Talking deriving (Eq, Show)
 data ZIndex = Background | OnObject | Foreground deriving (Eq, Show)
 data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
 data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
@@ -104,7 +103,6 @@ data Field = Field {
   _resource :: Resource,
   _counterF :: Int,
   _isDebug :: Bool,
-  _stateField :: StateField,
   _danmakuTitle :: String
   }
 
@@ -221,7 +219,6 @@ instance Default Field where
     _resource = error "_resource is not defined.",
     _counterF = 0,
     _isDebug = False,
-    _stateField = Shooting,
     _danmakuTitle = ""
     }
 
@@ -235,8 +232,8 @@ runLookAt p q = interpret (step p q) where
   step :: p -> q -> Pattern p q a -> Product (State p) (State q) a
   step _ _ (Hook (Left f)) = Pair f (return ())
   step _ _ (Hook (Right f)) = Pair (return ()) f
-  step p _ Self = Pair (return p) (return p)
-  step _ q Env = Pair (return q) (return q)
+  step p _ Self = return p
+  step _ q Env = return q
   step _ _ Yield = Pair (return ()) (return ())
 
 runLookAt' :: p -> q -> ReifiedLookAt p q () -> 

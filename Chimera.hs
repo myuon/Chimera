@@ -109,9 +109,7 @@ talkloop = do
     runTalk (Speak s) = do
       mEngine.stateEngine .= Parsing
       mEngine.message .= s
-    runTalk Go = do
-      field.stateField .= Shooting
-      running .= stgloop
+    runTalk Go = running .= stgloop
     runTalk _ = return ()
 
 game :: IO (Maybe ())

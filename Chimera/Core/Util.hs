@@ -15,13 +15,11 @@ module Chimera.Core.Util (
   ) where
 
 import FreeGame
-import FreeGame.Data.Bitmap (bitmapSize)
 import Control.Lens
 import Control.Arrow ((***))
 import Control.Monad.State.Strict (MonadState)
 import qualified Data.Sequence as S
-import qualified Data.Foldable as F
-import qualified Data.IntMap as IM
+import qualified Data.IntMap.Strict as IM
 
 areaTop, areaLeft, areaBottom, areaRight :: Double
 areaTop = 16
@@ -80,6 +78,10 @@ insertIM :: a -> IM.IntMap a -> IM.IntMap a
 insertIM a m = snd $ insertIM' a m
 
 insertIM' :: a -> IM.IntMap a -> (Int, IM.IntMap a)
-insertIM' a m = case (IM.size m `IM.notMember` m) of
-  True -> let n = IM.size m in (n, IM.insert n a m)
-  False -> let n = head [x | x <- [1..], IM.notMember x m] in (n, IM.insert n a m)
+insertIM' a m = case n `IM.member` m of
+  True -> (n', IM.insert n' a m)
+  False -> (n, IM.insert n a m)
+  
+  where
+    n = IM.size m
+    n' = head [x | x <- [0..], x `IM.notMember` m]

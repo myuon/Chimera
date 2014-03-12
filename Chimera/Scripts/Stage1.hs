@@ -10,27 +10,20 @@ import Data.Default (def)
 
 import Chimera.Core.World
 import Chimera.Scripts
+import Chimera.Scripts.Common
 
 stage1 :: Stage ()
 stage1 = do
   talk $ do
-    say' $ aline "ルーフェはお母さんからおつかいを頼まれました。"
+    say' $ aline "メッセージのテスト"
     lufe <- character 0 $ V2 500 300
     say lufe $ 
-      aline "はぁ、面倒くさいな〜。" `click`
-      aline "でもおつかい断るとさらに面倒なことになるしなぁ…。" `click`
-      aline "何でもいいからさっさと終わらせよっと。"
+      aline "こんにちは。" `click`
+      aline "ルーフェです。"
     delCharacter lufe
-    say' $ aline "ルーフェは妖精の森を抜けて隣街に向かいます。"
-  
-    say' $ 
-      aline "このChimeraというゲームは全てHaskellという言語で書かれています。" `click`
-      aline "そして使っているのはOpenGLをバックエンドにもつfree-gameライブラリです。" `click`
-      aline "free-gameの名前の由来にもなっているFreeモナドは、functorから最低限の構造をもったMonadを創りだすことができる道具です。" `click`
-      aline "これによってChimeraではGameができStageが記述されDanmakuを形作っているのです。" `click`
-      aline "そしてこの弾幕STGはより自由に、高級に、簡単に弾幕を記述することを目的として制作されています。"
+    say' $ aline "メッセージのテストを終わります。"
 
---  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
+  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
@@ -79,10 +72,11 @@ boss1 = do
   hook $ Left $ motionCommon 100 Stay
   res <- getResource
   when (e^.counter == 130) $ effs $ return $ effEnemyStart res (e^.pos)
-  when (e^.counter == 200) $
-    effs $ [effEnemyAttack 0 res (e^.pos),
-            effEnemyAttack 1 res (e^.pos),
-            effEnemyAttack 2 res (e^.pos)]
+  when (e^.counter == 200) $ do
+    mapM_ enemyEffect $ [
+      effEnemyAttack 0 res (e^.pos),
+      effEnemyAttack 1 res (e^.pos),
+      effEnemyAttack 2 res (e^.pos)]
   
   let def' = def & pos .~ e^.pos & angle .~ (fromIntegral $ e^.counter)/30
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
@@ -142,9 +136,10 @@ boss2 = do
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
   when (e^.counter == 150) $
-    effs $ [effEnemyAttack 0 res (e^.pos),
-            effEnemyAttack 1 res (e^.pos),
-            effEnemyAttack 2 res (e^.pos)]
+    mapM_ enemyEffect $ [
+      effEnemyAttack 0 res (e^.pos),
+      effEnemyAttack 1 res (e^.pos),
+      effEnemyAttack 2 res (e^.pos)]
   
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
     shots $ (flip map) [0..5] $ \i ->
@@ -188,6 +183,10 @@ boss3 = do
   hook $ Left $ motionCommon 100 Stay
   p <- getPlayer
   let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  when (e^.counter == 150) $ do
+    res <- getResource
+    enemyEffect $ effEnemyAttack 0 res (e^.pos)
+    enemyEffect $ effEnemyAttack 1 res (e^.pos)
   
   let n = 8 :: Int
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $

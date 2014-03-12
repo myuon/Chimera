@@ -14,6 +14,7 @@ import qualified Data.Foldable as F
 import Chimera.Core.Load as M
 import Chimera.Core.World as M
 import Chimera.Scripts as M
+import Chimera.Scripts.Common
 
 instance GUIClass Field where
   update = do
