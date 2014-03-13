@@ -24,7 +24,7 @@ stage1 = do
     say' $ aline "メッセージのテストを終わります。"
 
   keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
-  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
+--  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
@@ -179,6 +179,8 @@ boss2 = do
 
 boss3 :: Danmaku EnemyObject ()
 boss3 = do
+  setName "爆発弾"
+
   e <- self
   hook $ Left $ motionCommon 100 Stay
   p <- getPlayer
@@ -190,29 +192,26 @@ boss3 = do
     enemyEffect $ effEnemyAttack 2 res (e^.pos)
   
   let n = 8 :: Int
-  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
+  let def' = def & pos .~ e^.pos & speed .~ 3 & kind .~ Needle
+  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [0..n] $ \i ->
-      makeBullet $
-      pos .~ e^.pos $
-      speed .~ 2 $
-      angle .~ ang + fromIntegral i*2*pi/fromIntegral n $
-      bcolor .~ (toEnum $ i*2 `mod` 8) $
-      kind .~ Needle $
-      runAuto %~ (\f -> go >> f) $
-      def
+      makeBullet $ def'
+      & angle .~ ang + fromIntegral i*2*pi/fromIntegral n
+      & bcolor .~ (toEnum $ i*2 `mod` 2)
+      & runAuto %~ (\f -> go >> f)
   
   where
     go :: Danmaku BulletObject ()
     go = do
-      b <- self
-      let t = pi/3
-      let time = 50
-      when ((b^.counter) == 200) $
-        shots $ return $ def & auto .~ b & angle +~ t & kind .~ Oval
-      
       hook $ Left $ do
-        counter %= (+1)
-        cnt <- use counter
-        when (cnt < 200 && cnt `mod` time == 0) $ speed += 1.5
-        when (cnt < 200) $
-          speed -= (fromIntegral $ time - cnt `mod` time)/1000
+        speed -= 0.01
+        counter += 1
+
+      b <- self
+      let n = 8 :: Int
+      when (b^.counter == 150) $
+        shots $ flip map [0..n] $ \i ->
+          makeBullet $ def
+          & auto .~ b & kind .~ BallLarge & speed .~ 1.5
+          & bcolor .~ Blue
+          & angle .~ fromIntegral i*2*pi/fromIntegral n

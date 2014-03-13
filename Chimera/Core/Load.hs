@@ -79,22 +79,22 @@ getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
 getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
 
 clipBulletBitmap :: BKind -> BColor -> Bitmap -> Bitmap
-clipBulletBitmap b c
-  | b == BallLarge  = clip (60 * colorOffset c) 0 60 60
-  | b == BallMedium = clip (30 * colorOffset c) 60 30 30
-  | b == BallSmall  = clip (20 * colorOffset c) 90 20 20
-  | b == Oval       = clip (160 + 10 * colorOffset c) 90 10 20
-  | b == Diamond    = clip (240 + 10 * colorOffset c) 90 10 20
-  | b == BallFrame  = clip (20 * colorOffset c) 110 20 20
-  | b == Needle     = clip (5 * colorOffset c) 130 5 100
-  | b == BallTiny   = clip (40 + 10 * colorOffset c) 130 10 10
+clipBulletBitmap bk bc
+  | bk == BallLarge  = clip (60 * colorOffset bc) 0 60 60
+  | bk == BallMedium = clip (30 * colorOffset bc) 60 30 30
+  | bk == BallSmall  = clip (20 * colorOffset bc) 90 20 20
+  | bk == Oval       = clip (160 + 10 * colorOffset bc) 90 10 20
+  | bk == Diamond    = clip (240 + 10 * colorOffset bc) 90 10 20
+  | bk == BallFrame  = clip (20 * colorOffset bc) 110 20 20
+  | bk == Needle     = clip (5 * colorOffset bc) 130 5 100
+  | bk == BallTiny   = clip (40 + 10 * colorOffset bc) 130 10 10
   | otherwise = error "otherwise case in clipBulletBitmap"
   where
     colorOffset :: BColor -> Int
     colorOffset = fromEnum
 
     clip :: Int -> Int -> Int -> Int -> Bitmap -> Bitmap
-    clip a b c d img = cropBitmap img (c,d) (a,b)
+    clip a b c d bmp = cropBitmap bmp (c,d) (a,b)
 
 areaBullet :: BKind -> Vec2
 areaBullet BallLarge = V2 15 15

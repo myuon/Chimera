@@ -7,13 +7,11 @@ module Chimera.Core.World (
 
 import FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini (Program)
-import Control.Monad.State.Strict (State, StateT, get, execState, execStateT, lift, modify)
+import Control.Monad.State.Strict (State, StateT, get, execState, lift, modify)
 import qualified Data.Vector as V
 import qualified Data.Sequence as S
 import qualified Data.Map as M
 import qualified Data.Traversable as T
-import qualified Data.Foldable as F
 import Data.Default
 import Data.Functor.Product
 
