@@ -246,25 +246,26 @@ runLookAtAll p q m = go m `execState` return () where
   go (Return _) = return ()
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
-collide oc ob = case ob^.speed > ob^.size^._x || ob^.speed > ob^.size^._y of
-  True -> let ob' = (ob & size +~ fromPolar (ob^.speed, -ob^.angle))
-          in detect ob' oc || detect oc ob'
-  False -> detect ob oc || detect oc ob
+collide oc ob = let oc' = extend oc; ob' = extend ob; in
+  detect ob' oc' || detect oc' ob'
   where
+    extend :: (HasObject c) => c -> c
+    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.angle) + (x^.spXY)
+--    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
+
     detect :: (HasObject c, HasObject c') => c -> c' -> Bool
     detect a b = 
       let V2 w' h' = a^.size
-          r = rot2D (a^.angle) in
+          r = \v -> rotate2 v $ a^.angle in
       or [(a^.pos) `isIn` b,
-          (a^.pos + r !* (V2   w'    h' )) `isIn` b,
-          (a^.pos + r !* (V2 (-w')   h' )) `isIn` b,
-          (a^.pos + r !* (V2   w'  (-h'))) `isIn` b,
-          (a^.pos + r !* (V2 (-w') (-h'))) `isIn` b]
+          (a^.pos + r (V2   w'    h' )) `isIn` b,
+          (a^.pos + r (V2 (-w')   h' )) `isIn` b,
+          (a^.pos + r (V2   w'  (-h'))) `isIn` b,
+          (a^.pos + r (V2 (-w') (-h'))) `isIn` b]
     
     isIn :: (HasObject c) => Vec2 -> c -> Bool
     isIn p box = isInCentoredBox (p-box^.pos) where
       isInCentoredBox :: Vec2 -> Bool
-      isInCentoredBox p' = 
-        let V2 px' py' = rot2D (-box^.angle) !* p' in
+      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.angle) in
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 

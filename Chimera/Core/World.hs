@@ -12,7 +12,6 @@ import qualified Data.Vector as V
 import qualified Data.Sequence as S
 import qualified Data.Map as M
 import qualified Data.Traversable as T
-import Data.Default
 import Data.Functor.Product
 
 import Chimera.Core.Types as M
@@ -30,22 +29,28 @@ instance GetPicture Enemy where
 
 instance GUIClass Player where
   update = do
-    s <- use speed
-    k <- use keysPlayer
     counter %= (+1)
-    pos += case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
-      True -> ((0.5 * s) *^ dir k)
-      False -> s *^ dir k
+    do
+      sp <- use spXY
+      pos += sp
+    spXY .= 0
     pos %= clamp
+
+    do
+      s <- use speed
+      k <- use keysPlayer
+      spXY .= case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
+        True -> ((0.5 * s) *^ dir k)
+        False -> s *^ dir k
 
     where
       dir :: M.Map Key Int -> Vec2
-      dir k = let addTup b p q = bool q (fromPair p+q) b in
+      dir k = let addTup b p q = bool q (uncurry V2 p+q) b in
         addTup (k M.! KeyUp    > 0) (0,-1) $
         addTup (k M.! KeyDown  > 0) (0,1) $
         addTup (k M.! KeyRight > 0) (1,0) $
         addTup (k M.! KeyLeft  > 0) (-1,0) $
-        fromPair (0,0)
+        0
 
   paint res = do
     p <- get
@@ -64,7 +69,7 @@ instance GUIClass Bullet where
   update = do
     r <- use speed
     t <- use angle
-    pos %= (+ fromPolar (r,t))
+    pos += rotate2 (V2 r 0) t
     p <- use pos
     unless (isInside p) $ stateBullet .= Outside
 

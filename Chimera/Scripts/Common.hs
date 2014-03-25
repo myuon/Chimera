@@ -119,7 +119,7 @@ zakoCommon _ mot time bk c = do
   e <- self
   hook $ Left mot
   p <- getPlayer
-  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  ang <- anglePlayer
 
   when ((e^.counter) `mod` time == 0 && e^.stateChara == Attack) $
     shots $ return $
@@ -197,3 +197,8 @@ stageTest = do
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 Needle Red
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallTiny Red
 
+anglePlayer :: Danmaku EnemyObject Double
+anglePlayer = do
+  e <- self
+  p <- getPlayer
+  return $ (pi/2 +) $ (\(V2 x y) -> atan2 x y) $ (e^.pos - p^.pos)

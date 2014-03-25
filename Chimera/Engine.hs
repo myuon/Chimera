@@ -112,7 +112,7 @@ collideObj = do
   res <- use resource
   let run' = run (createEffect res)
   
-  (n, bs') <- return . runPair PlayerB p =<< use bullets
+  (n, bs') <- runPair PlayerB p `fmap` use bullets
   player %= (hp -~ n)
   when (n>0) $ effects %= (insertIM $ effPlayerDead res (p^.pos))
   
@@ -143,7 +143,7 @@ collideObj = do
     createEffect res PlayerB e = effPlayerDead res (e^.pos)
     createEffect res EnemyB e = effPlayerDead res (e^.pos)
     createEffect _ _ _ = error "otherwise case in createEffect"
-      
+
 addBullet :: State Field ()
 addBullet = do
   keys <- use (player.keysPlayer)

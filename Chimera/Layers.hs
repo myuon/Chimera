@@ -38,7 +38,7 @@ instance GUIClass Layer where
     a <- get
     s <- use sizeLayer
     b <- ((\f -> f res) `fmap` use imgLayer)
-    let s' = fmap fromIntegral $ fromPair $ bitmapSize b
+    let s' = fmap fromIntegral $ uncurry V2 $ bitmapSize b
     translate (a^.posLayer) $ scale (s / s') $ bitmap b
 
 data StateEngine = Printing | Parsing | Waiting | End deriving (Eq, Show)

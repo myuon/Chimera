@@ -134,7 +134,7 @@ boss2 = do
   hook $ Left $ motionCommon 100 Stay
   res <- getResource
   p <- getPlayer
-  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  ang <- anglePlayer
   when (e^.counter == 150) $
     mapM_ enemyEffect $ [
       effEnemyAttack 0 res (e^.pos),
@@ -184,7 +184,7 @@ boss3 = do
   e <- self
   hook $ Left $ motionCommon 100 Stay
   p <- getPlayer
-  let ang = (+) (pi/2) $ uncurry atan2 $ toPair (e^.pos - p^.pos)
+  ang <- anglePlayer
   when (e^.counter == 150) $ do
     res <- getResource
     enemyEffect $ effEnemyAttack 0 res (e^.pos)
@@ -204,7 +204,7 @@ boss3 = do
     go :: Danmaku BulletObject ()
     go = do
       hook $ Left $ do
-        speed -= 0.01
+        use counter >>= \c -> when (c <= 150) $ speed -= 0.01
         counter += 1
 
       b <- self
