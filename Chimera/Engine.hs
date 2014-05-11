@@ -66,7 +66,7 @@ instance GUIClass Field where
       
       debugging = do
         F.mapM_ (\b -> color blue . polygon $ 
-                       boxVertexRotated (b^.pos) (b^.size) (b^.angle)) =<< use bullets
+                       boxVertexRotated (b^.pos) (b^.size) (b^.ang)) =<< use bullets
         _ <- (\p -> color yellow . polygon $ 
                     boxVertex (p^.pos) (p^.size)) =<< use player
         F.mapM_ (\e -> color green . polygon $ 
@@ -166,7 +166,7 @@ addBullet = do
     def' = 
       makeBullet $
       speed .~ 15 $
-      angle .~ pi/2 $ 
+      ang .~ pi/2 $ 
       kind .~ Diamond $
       bcolor .~ Red $
       stateBullet .~ PlayerB $

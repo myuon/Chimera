@@ -3,7 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 module Chimera.Core.Util (
   areaTop, areaLeft, areaBottom, areaRight
-  , isInside
+  , isInGame
   , boxVertex, boxVertexRotated
   , cutIntoN
   , when_, (><=)
@@ -24,8 +24,8 @@ areaLeft = 32
 areaBottom = 444
 areaRight = 416
 
-isInside :: Vec2 -> Bool
-isInside (V2 a b) = (areaLeft-40 <= a && a <= areaRight+40) && (areaTop-40 <= b && b <= areaBottom+40)
+isInGame :: Vec2 -> Bool
+isInGame (V2 a b) = (areaLeft-40 <= a && a <= areaRight+40) && (areaTop-40 <= b && b <= areaBottom+40)
 
 boxVertex :: Vec2 -> Vec2 -> [Vec2]
 boxVertex pos size = [pos - size,

@@ -113,7 +113,7 @@ talkloop = do
     runTalk _ = return ()
 
 game :: IO (Maybe ())
-game = runGame Windowed (BoundingBox 0 0 640 480) $ do
+game = runGame Windowed (Box (V2 0 0) (V2 640 480)) $ do
   setFPS 60
   setTitle "Chimera"
   clearColor $ Color 0 0 0.2 1.0

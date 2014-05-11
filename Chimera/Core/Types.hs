@@ -57,7 +57,7 @@ data Object = Object {
   _pos :: Vec2,
   _spXY :: Vec2,
   _speed :: Double,
-  _angle :: Double,
+  _ang :: Double,
   
   _counter :: Int,
   _size :: Vec2
@@ -159,7 +159,7 @@ instance Default Object where
     _pos = V2 0 0,
     _spXY = V2 0 0,
     _speed = 0,
-    _angle = 0,
+    _ang = 0,
     _counter = 0,
     _size = V2 1 1
     }
@@ -250,13 +250,13 @@ collide oc ob = let oc' = extend oc; ob' = extend ob; in
   detect ob' oc' || detect oc' ob'
   where
     extend :: (HasObject c) => c -> c
-    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.angle) + (x^.spXY)
+    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.ang) + (x^.spXY)
 --    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
 
     detect :: (HasObject c, HasObject c') => c -> c' -> Bool
     detect a b = 
       let V2 w' h' = a^.size
-          r = \v -> rotate2 v $ a^.angle in
+          r = \v -> rotate2 v $ a^.ang in
       or [(a^.pos) `isIn` b,
           (a^.pos + r (V2   w'    h' )) `isIn` b,
           (a^.pos + r (V2 (-w')   h' )) `isIn` b,
@@ -266,6 +266,6 @@ collide oc ob = let oc' = extend oc; ob' = extend ob; in
     isIn :: (HasObject c) => Vec2 -> c -> Bool
     isIn p box = isInCentoredBox (p-box^.pos) where
       isInCentoredBox :: Vec2 -> Bool
-      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.angle) in
+      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 

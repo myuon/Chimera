@@ -63,21 +63,21 @@ instance GUIClass Effect where
   
   paint res = do
     b <- get
-    lift $ translate (b^.pos) $ rotateR (b^.angle) $ scale (b^.size) $ b^.img $ res
+    lift $ translate (b^.pos) $ rotateR (b^.ang) $ scale (b^.size) $ b^.img $ res
 
 instance GUIClass Bullet where
   update = do
     r <- use speed
-    t <- use angle
+    t <- use ang
     pos += rotate2 (V2 r 0) t
     p <- use pos
-    unless (isInside p) $ stateBullet .= Outside
+    unless (isInGame p) $ stateBullet .= Outside
 
   paint res = do
     b <- get
     case b^.size^._x /= b^.size^._y of
       True -> draw $ translate (b^.pos) $ 
-              rotateR (b^.angle + pi/2) $ bitmap (picture res b)
+              rotateR (b^.ang + pi/2) $ bitmap (picture res b)
       False -> draw $ translate (b^.pos) $ bitmap (picture res b)
 
 instance GUIClass Enemy where

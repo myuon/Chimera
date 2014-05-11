@@ -52,7 +52,7 @@ effEnemyAttack i _ p =
     run = do
       f <- get
       when (f^.counter <= 50) $ size += 1/50
-      angle += anglePlus i
+      ang += anglePlus i
       counter %= (+1)
         
     anglePlus :: Int -> Double
@@ -118,15 +118,14 @@ zakoCommon :: Int -> State EnemyObject () -> Int -> BKind -> BColor -> Danmaku E
 zakoCommon _ mot time bk c = do
   e <- self
   hook $ Left mot
-  p <- getPlayer
-  ang <- anglePlayer
+  ang' <- anglePlayer
 
   when ((e^.counter) `mod` time == 0 && e^.stateChara == Attack) $
     shots $ return $
       makeBullet $
       pos .~ (e^.pos) $ 
       speed .~ 2 $
-      angle .~ ang $
+      ang .~ ang' $
       kind .~ bk $
       bcolor .~ c $
       def
@@ -144,7 +143,7 @@ debug = do
       makeBullet $
       pos .~ (e^.pos) $ 
       speed .~ 0.5 $
-      angle .~ i*2*pi/n + (fromIntegral cnt)/100 $
+      ang .~ i*2*pi/n + (fromIntegral cnt)/100 $
       kind .~ BallTiny $
       bcolor .~ Red $
       def
@@ -197,7 +196,7 @@ stageTest = do
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 Needle Red
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallTiny Red
 
-anglePlayer :: Danmaku EnemyObject Double
+anglePlayer :: (HasObject c) => Danmaku c Double
 anglePlayer = do
   e <- self
   p <- getPlayer

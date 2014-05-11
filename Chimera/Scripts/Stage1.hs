@@ -23,7 +23,7 @@ stage1 = do
     delCharacter lufe
     say' $ aline "メッセージのテストを終わります。"
 
-  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss3
+  keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss4
 --  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
     
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
@@ -78,12 +78,12 @@ boss1 = do
       effEnemyAttack 1 res (e^.pos),
       effEnemyAttack 2 res (e^.pos)]
   
-  let def' = def & pos .~ e^.pos & angle .~ (fromIntegral $ e^.counter)/30
+  let def' = def & pos .~ e^.pos & ang .~ (fromIntegral $ e^.counter)/30
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [1..4] $ \i -> 
       makeBullet $
       speed .~ 3.15 $
-      angle +~ 2*pi*i/4 $
+      ang +~ 2*pi*i/4 $
       kind .~ Oval $
       bcolor .~ Red $
       runAuto %~ (\f -> go 190 300 >> f) $
@@ -91,7 +91,7 @@ boss1 = do
     shots $ (flip map) [1..4] $ \i ->
       makeBullet $
       speed .~ 3 $
-      angle +~ 2*pi*i/4 $
+      ang +~ 2*pi*i/4 $
       kind .~ Oval $
       bcolor .~ Yellow $
       runAuto %~ (\f -> go 135 290 >> f) $
@@ -99,7 +99,7 @@ boss1 = do
     shots $ (flip map) [1..4] $ \i ->
       makeBullet $
       speed .~ 2.5 $
-      angle +~ 2*pi*i/4 $
+      ang +~ 2*pi*i/4 $
       kind .~ Oval $
       bcolor .~ Green $
       runAuto %~ (\f -> go 120 280 >> f) $
@@ -107,7 +107,7 @@ boss1 = do
     shots $ (flip map) [1..4] $ \i ->
       makeBullet $
       speed .~ 2.2 $
-      angle +~ 2*pi*i/4 $
+      ang +~ 2*pi*i/4 $
       kind .~ Oval $
       bcolor .~ Blue $
       runAuto %~ (\f -> go 100 270 >> f) $
@@ -119,7 +119,7 @@ boss1 = do
       counter %= (+1)
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
-        angle %= (+ pi/t1)
+        ang %= (+ pi/t1)
         speed %= (subtract (7.0/t2))
       when (cnt == 170) $ do
         kind .= BallTiny
@@ -134,7 +134,7 @@ boss2 = do
   hook $ Left $ motionCommon 100 Stay
   res <- getResource
   p <- getPlayer
-  ang <- anglePlayer
+  ang' <- anglePlayer
   when (e^.counter == 150) $
     mapM_ enemyEffect $ [
       effEnemyAttack 0 res (e^.pos),
@@ -146,7 +146,7 @@ boss2 = do
       makeBullet $
       pos .~ e^.pos $
       speed .~ 2 $
-      angle .~ ang + fromIntegral i*2*pi/5 $
+      ang .~ ang' + fromIntegral i*2*pi/5 $
       bcolor .~ (toEnum $ i*2 `mod` 8) $
       runAuto %~ (\f -> go i >> f) $
       def
@@ -155,7 +155,7 @@ boss2 = do
       makeBullet $
       pos .~ e^.pos $
       speed .~ 1.5 $
-      angle .~ ang $
+      ang .~ ang' $
       kind .~ BallLarge $
       bcolor .~ Purple $
       def
@@ -167,14 +167,14 @@ boss2 = do
       let t = pi/3
       let time = 50
       when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $
-        shots $ return $ def & auto .~ b & angle +~ t
+        shots $ return $ def & auto .~ b & ang +~ t
       
       hook $ Left $ do
         counter %= (+1)
         cnt <- use counter
         when (cnt < 200 && cnt `mod` time == 0) $ do
           speed += 1.5
-          angle -= t
+          ang -= t
         when (cnt < 200) $ speed -= (fromIntegral $ time - cnt `mod` time)/1000
 
 boss3 :: Danmaku EnemyObject ()
@@ -184,7 +184,7 @@ boss3 = do
   e <- self
   hook $ Left $ motionCommon 100 Stay
   p <- getPlayer
-  ang <- anglePlayer
+  ang' <- anglePlayer
   when (e^.counter == 150) $ do
     res <- getResource
     enemyEffect $ effEnemyAttack 0 res (e^.pos)
@@ -196,7 +196,7 @@ boss3 = do
   when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
     shots $ (flip map) [0..n] $ \i ->
       makeBullet $ def'
-      & angle .~ ang + fromIntegral i*2*pi/fromIntegral n
+      & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
       & bcolor .~ (toEnum $ i*2 `mod` 2)
       & runAuto %~ (\f -> go >> f)
   
@@ -214,4 +214,42 @@ boss3 = do
           makeBullet $ def
           & auto .~ b & kind .~ BallLarge & speed .~ 1.5
           & bcolor .~ Blue
-          & angle .~ fromIntegral i*2*pi/fromIntegral n
+          & ang .~ fromIntegral i*2*pi/fromIntegral n
+
+boss4 :: Danmaku EnemyObject ()
+boss4 = do
+  setName "ホーミング弾"
+
+  e <- self
+  hook $ Left $ motionCommon 100 Stay
+  p <- getPlayer
+  ang' <- anglePlayer
+  when (e^.counter == 150) $ do
+    res <- getResource
+    enemyEffect $ effEnemyAttack 0 res (e^.pos)
+    enemyEffect $ effEnemyAttack 1 res (e^.pos)
+    enemyEffect $ effEnemyAttack 2 res (e^.pos)
+  
+  let n = 3 :: Int
+  let def' = def & pos .~ e^.pos & speed .~ 5 & kind .~ Oval
+  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
+    shots $ (flip map) [0..n] $ \i ->
+      makeBullet $ def'
+      & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
+      & bcolor .~ (toEnum $ i*2 `mod` 2)
+      & runAuto %~ (\f -> go >> f)
+  
+  where
+    go :: Danmaku BulletObject ()
+    go = do
+      ang' <- anglePlayer
+      hook $ Left $ do
+        use counter >>= \c -> when (c <= 50) $ speed -= 0.02
+        counter += 1
+
+        b <- use ang
+        let V2 ax ay = unitV2 ang'; V2 bx by = unitV2 b
+        use counter >>= \c -> when (c `mod` 5 == 0) $ do
+          ang += case ax*by - ay*bx > 0 of
+                   True -> -10*pi/180
+                   False -> 10*pi/180
