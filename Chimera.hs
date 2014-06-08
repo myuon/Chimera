@@ -9,8 +9,7 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import Data.Reflection (Given, give, given)
 
-import Chimera.Engine
-import Chimera.Menu
+import Chimera.World
 import Chimera.Scripts.Stage1
 import Chimera.Config (loadConfig)
 import Chimera.Load (loadResource)

@@ -46,6 +46,7 @@ data Config = Config {
   _windowMode :: WindowMode,
   _windowSize :: BoundingBox2,
   _gameArea :: BoundingBox2,
+  _validArea :: BoundingBox2,
   _debugMode :: Bool,
   _titleName :: String
   }
@@ -133,9 +134,6 @@ makeLenses ''Field
 class GUIClass c where
   update :: (Given Resource, Given Config) => State c ()
   paint :: (Given Resource) => StateT c Game ()
-
-class HasGetResource c where
-  getResource :: c Resource
 
 instance Autonomic (Autonomie m a) m a where autonomie = id
 instance (Eq a) => Eq (Autonomie m a) where a == b = a^.auto == b^.auto
@@ -239,7 +237,7 @@ clamp (V2 x y) = V2 (edgeX x) (edgeY y)
     edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
             (\p -> bool p areaRight (p > areaRight))
     
-    edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
+    edgeY = (\p -> bool p areaTop (p < areaTop)) .
             (\p -> bool p areaBottom (p > areaBottom))
 
 runLookAt :: p -> q -> LookAt p q () -> 
@@ -285,3 +283,15 @@ collide oc ob = let oc' = extend oc; ob' = extend ob; in
       isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 
+areaBullet :: BKind -> Vec2
+areaBullet BallLarge = V2 15 15
+areaBullet BallMedium = V2 7 7
+areaBullet BallSmall = V2 4 4
+areaBullet Oval = V2 7 3
+areaBullet Diamond = V2 5 3
+areaBullet BallFrame = V2 5 5
+areaBullet Needle = V2 30 1
+areaBullet BallTiny = V2 2 2
+
+makeBullet :: (HasObject c, HasBulletObject c) => c -> c
+makeBullet b = b & size .~ areaBullet (b^.kind)

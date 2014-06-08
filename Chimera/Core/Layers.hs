@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.Layers ( 
-  Layer, posLayer, sizeLayer, imgLayer
+module Chimera.Core.Layers ( 
+  Layer, tileImg
   , StateEngine(..), MessageEngine
   , Token(..), Expr(..), msingle
   , click, clickend, aline
@@ -19,29 +19,31 @@ import Chimera.Core.Types
 import Chimera.Core.Util
 
 data Layer = Layer {
-  _posLayer :: Vec2,
-  _sizeLayer :: Vec2,
-  _imgLayer :: Resource -> Bitmap
+  _objLayer :: Object,
+  _tileImg :: Resource -> Bitmap
   }
-             
+
 makeClassy ''Layer
+
+instance HasObject Layer where object = objLayer
 
 instance Default Layer where
   def = Layer {
-    _posLayer = V2 320 420,
-    _sizeLayer = V2 550 100,
-    _imgLayer = \res -> res^.layerBoard
+    _objLayer = def
+      & pos .~ V2 320 420
+      & size .~ V2 550 100,
+    _tileImg = \res -> res^.layerBoard
     }
 
 instance GUIClass Layer where
   update = return ()
   paint = do
     a <- get
-    s <- use sizeLayer
-    let res = given :: Resource
-    b <- ((\f -> f res) `fmap` use imgLayer)
+    s <- use size
+    let resource = given :: Resource
+    b <- ((\f -> f resource) `fmap` use tileImg)
     let s' = fmap fromIntegral $ uncurry V2 $ bitmapSize b
-    translate (a^.posLayer) $ scale (s / s') $ bitmap b
+    translate (a^.pos) $ scale (s / s') $ bitmap b
 
 data StateEngine = Printing | Parsing | Waiting | End deriving (Eq, Show)
 data Token = Text String | ClickWait deriving (Eq, Show)
@@ -92,9 +94,8 @@ instance HasLayer MessageEngine where layer = layerMessageEngine
 
 runToken :: Token -> State MessageEngine ()
 runToken (Text u) = do
-  la <- use layerMessageEngine
   cursor .= 0
-  printing .= overflow u (la^.sizeLayer)
+  printing <~ liftM (overflow u . (^.size)) (use layerMessageEngine)
   stateEngine .= Printing
   
   where
@@ -136,5 +137,5 @@ instance GUIClass MessageEngine where
 
     where
       topleft :: Layer -> Vec2
-      topleft la = la^.posLayer - la^.sizeLayer/2 + V2 25 25
+      topleft la = la^.pos - la^.size/2 + V2 25 25
 

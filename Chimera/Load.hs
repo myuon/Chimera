@@ -1,7 +1,6 @@
 {-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
 module Chimera.Load (
   loadResource
-  , GetPicture, picture
   , charaImg, bulletImg, effectImg, board
   , BKind(..), BColor(..)
   ) where
@@ -14,8 +13,8 @@ import qualified Data.Map as M
 import Chimera.Core.Util
 import Chimera.Core.Types
 
-initResource :: Game Resource
-initResource = do
+loadResource :: Game Resource
+loadResource = do
   r1 <- readBitmap "data/img/player_lufe.png"
   r2 <- readBitmap "data/img/dot_yousei.png"
   r3 <- readBitmap "data/img/shot.png"
@@ -29,8 +28,11 @@ initResource = do
   p1_2 <- readBitmap "data/img/pat1_2.png"
   la <- readBitmap "data/img/layer_200_w.png"
   f <- loadFont "data/font/VL-PGothic-Regular.ttf"
-  
   c1 <- readBitmap "data/img/lufe_400.png"
+
+  let ns = fmap (text f 20 . return) "0123456789"
+  let ls = fmap (\x -> (x, text f 20 x))
+        $ ["fps", "bullets", "effects", "enemies", "score", "hiscore", "hp"]
   
   return $ Resource {
     _charaImg = V.fromList [cropBitmap r1 (50,50) (0,0),
@@ -46,35 +48,17 @@ initResource = do
     _font = f,
     _layerBoard = la,
     _portraits = V.fromList [c1],
-    _numbers = error "_numbers is not defined",
-    _labels = error "_labels is not defined"
+    _numbers = V.fromList ns,
+    _labels = M.fromList ls
   }
-
-class GetPicture c where
-  picture :: Resource -> c -> Bitmap
-
-loadResource :: Game Resource
-loadResource = initResource >>= execLoad
-
-execLoad :: Resource -> Game Resource
-execLoad res = do
-  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
-  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
---  forkFrame $ F.mapM_ (F.mapM_ preloadBitmap) $ res ^. bulletImg
-  return $ res
-    & numbers .~ V.fromList ns
-    & labels .~ M.fromList ls
-  
-  where
-    ns = fmap (text (res^.font) 20 . return) "0123456789"
-    ls = fmap (\x -> (x, text (res^.font) 20 x)) $
-      ["fps", "bullets", "effects", "enemies", "score", "hiscore", "hp"]
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 
-  V.fromList [V.fromList [clipBulletBitmap k c pic
-                         | c <- [Red .. Magenta]] 
-             | k <- [BallLarge .. Needle]]
+  V.fromList [
+    V.fromList [
+      clipBulletBitmap k c pic
+    | c <- [Red .. Magenta]] 
+  | k <- [BallLarge .. Needle]]
 
 clipBulletBitmap :: BKind -> BColor -> Bitmap -> Bitmap
 clipBulletBitmap bk bc

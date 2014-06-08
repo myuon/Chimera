@@ -10,8 +10,8 @@ import qualified Data.IntMap as IM
 import qualified Data.Sequence as S
 import Data.Reflection (Given, given)
 
+import Chimera.Core.Types
 import Chimera.Scripts
-import Chimera.Core.World
 
 data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 

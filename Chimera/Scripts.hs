@@ -8,7 +8,6 @@ module Chimera.Scripts (
   , effColored, effCommonAnimated
   , talk, say', say
   , setName
-  , module M
   ) where
 
 import FreeGame
@@ -24,8 +23,9 @@ import qualified Data.IntMap.Strict as IM
 import Data.Functor.Product
 import Data.Reflection (Given, given)
 
-import Chimera.Core.World
-import Chimera.Layers as M
+import Chimera.Core.Util
+import Chimera.Core.Types
+import Chimera.Core.Layers
 
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 

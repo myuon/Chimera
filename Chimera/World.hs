@@ -1,21 +1,105 @@
-{-# LANGUAGE FlexibleContexts #-}
-module Chimera.Engine ( module M, addBullet ) where
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts, RankNTypes #-}
+module Chimera.World (
+  actPlayer, runDanmaku, scanAutonomies, addBullet
+  , module M
+  ) where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (lift, execStateT, execState, State)
+import Control.Monad.State.Strict
 import Data.Char (digitToInt)
 import Data.Default (def)
-import qualified Data.Sequence as S
 import qualified Data.Vector as V
+import qualified Data.Sequence as S
 import qualified Data.Map as M
-import qualified Data.IntMap as IM
+import qualified Data.Traversable as T
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Foldable as F
+import Data.Functor.Product
 import Data.Reflection (Given, given)
 
-import Chimera.Core.World as M
+import Chimera.Core.Types as M
+import Chimera.Core.Util as M
+import Chimera.Core.Layers as M
+import Chimera.Core.Menu as M
 import Chimera.Scripts as M
 import Chimera.Scripts.Common
+
+instance GUIClass Player where
+  update = do
+    counter %= (+1)
+    do
+      sp <- use spXY
+      pos += sp
+    spXY .= 0
+    pos %= clamp
+
+    do
+      s <- use speed
+      k <- use keysPlayer
+      spXY .= case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
+        True -> ((0.5 * s) *^ dir k)
+        False -> s *^ dir k
+
+    where
+      dir :: M.Map Key Int -> Vec2
+      dir k = let addTup b p q = bool q (uncurry V2 p+q) b in
+        addTup (k M.! KeyUp    > 0) (0,-1) $
+        addTup (k M.! KeyDown  > 0) (0,1) $
+        addTup (k M.! KeyRight > 0) (1,0) $
+        addTup (k M.! KeyLeft  > 0) (-1,0) $
+        0
+
+  paint = do
+    p <- get
+    let resource = given :: Resource
+    draw $ translate (p^.pos) $ bitmap $ (resource^.charaImg) V.! 0
+
+instance GUIClass Effect where
+  update = do
+    run <- use runAuto
+    effectObject %= execState run
+  
+  paint = do
+    b <- get
+    let res = given :: Resource
+    lift $ translate (b^.pos) $ rotateR (b^.ang) $ scale (b^.size) $ b^.img $ res
+
+instance GUIClass Bullet where
+  update = do
+    r <- use speed
+    t <- use ang
+    pos += rotate2 (V2 r 0) t
+    p <- use pos
+    let config = given :: Config
+    unless (p `isInside` (config^.validArea)) $ stateBullet .= Outside
+
+  paint = do
+    let res = given :: Resource
+    V2 x y <- use size
+    b <- get
+    case x /= y of
+      True -> draw $ translate (b^.pos) $ 
+              rotateR (b^.ang + pi/2) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
+      False -> draw $ translate (b^.pos) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
+
+    where
+      getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
+      getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
+
+instance GUIClass Enemy where
+  update = do
+    sp <- use spXY
+    pos %= (+sp)
+    counter %= (+1)
+    h <- use hp
+    when (h <= 0) $ stateChara .= Dead
+  
+  paint = do
+    let res = given :: Resource
+    c <- get
+    draw $ translate (c^.pos) $ bitmap $ (res^.charaImg) V.! 1
 
 instance GUIClass Field where
   update = do
@@ -104,6 +188,26 @@ instance GUIClass Field where
       
       drawTitle = do
         translate (V2 40 30) . text (resource^.font) 10 =<< use danmakuTitle
+
+actPlayer :: StateT Player Game ()
+actPlayer = do
+  pairs <- lift $ mapM (\k -> (,) k `fmap` fromEnum `fmap` keyPress k) keyList
+  keysPlayer %= M.unionWith go (M.fromList pairs)
+  where
+    go a b
+      | a == 0 = 0
+      | otherwise = a + b
+
+runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
+runDanmaku = runLookAtAll
+
+scanAutonomies :: Lens' Field (S.Seq (Autonomie (Danmaku a) a)) -> State Field ()
+scanAutonomies member = do
+  f <- use id
+  let pairs = fmap (\c -> runDanmaku (c^.auto) f (c^.runAuto)) $ f^.member
+  member .= (fmap (\(b,s) -> b & auto %~ execState s) $ 
+             S.zip (f^.member) $ fmap (\(Pair a _) -> a) pairs)
+  modify $ execState $ T.mapM (\(Pair _ b) -> b) pairs
 
 collideObj :: (Given Resource) => State Field ()
 collideObj = do

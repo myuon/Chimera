@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.Menu where
+module Chimera.Core.Menu where
 
 import FreeGame
 import Control.Lens
