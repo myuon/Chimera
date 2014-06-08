@@ -13,6 +13,7 @@ import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IM
 import Data.Default
 import Data.Functor.Product
+import Data.Reflection (Given, given)
 
 import Chimera.Core.Util
 
@@ -40,6 +41,14 @@ data Pattern p q x where
   Self :: Pattern p q p
   Env :: Pattern p q q
   Yield :: Pattern p q ()
+
+data Config = Config {
+  _windowMode :: WindowMode,
+  _windowSize :: BoundingBox2,
+  _gameArea :: BoundingBox2,
+  _debugMode :: Bool,
+  _titleName :: String
+  }
 
 data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
@@ -99,8 +108,6 @@ data Field = Field {
   _enemy :: S.Seq Enemy,
   _bullets :: S.Seq Bullet,
   _effects :: IM.IntMap Effect,
-  
-  _resource :: Resource,
   _counterF :: Int,
   _isDebug :: Bool,
   _danmakuTitle :: String
@@ -113,6 +120,7 @@ type Bullet = Autonomie (Danmaku BulletObject) BulletObject
 type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
 
 makeSingletons ''Pattern 
+makeLenses ''Config
 makeLenses ''Resource
 makeClassy ''Object
 makeClassy ''Chara
@@ -123,8 +131,8 @@ makeLenses ''Player
 makeLenses ''Field
 
 class GUIClass c where
-  update :: State c ()
-  paint :: Resource -> StateT c Game ()
+  update :: (Given Resource, Given Config) => State c ()
+  paint :: (Given Resource) => StateT c Game ()
 
 class HasGetResource c where
   getResource :: c Resource
@@ -147,9 +155,6 @@ instance HasBulletObject Bullet where bulletObject = auto
 instance HasObject Enemy where object = auto . object
 instance HasChara Enemy where chara = auto . chara
 instance HasEnemyObject Enemy where enemyObject = auto
-
-instance HasGetResource (Danmaku c) where
-  getResource = (^.resource) `fmap` env
 
 instance (Monad m, Default a) => Default (Autonomie m a) where
   def = Autonomie def (return ())
@@ -214,8 +219,6 @@ instance Default Field where
     _enemy = S.empty,
     _bullets = S.empty,
     _effects = IM.empty,
-    
-    _resource = error "_resource is not defined.",
     _counterF = 0,
     _isDebug = False,
     _danmakuTitle = ""
@@ -225,6 +228,19 @@ keyList :: [Key]
 keyList = [
   KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift,
   charToKey 'Z', charToKey 'X']
+
+clamp :: (Given Config) => Vec2 -> Vec2
+clamp (V2 x y) = V2 (edgeX x) (edgeY y)
+  where
+    config = given :: Config
+
+    Box (V2 areaLeft areaTop) (V2 areaRight areaBottom) = config ^. gameArea
+
+    edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaRight (p > areaRight))
+    
+    edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaBottom (p > areaBottom))
 
 runLookAt :: p -> q -> LookAt p q () -> 
              State (Product (State p) (State q) ()) (LookAt p q ())

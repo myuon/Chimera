@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Chimera.Scripts.Stage1 (
   stage1
   )
@@ -7,12 +8,13 @@ import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (modify)
 import Data.Default (def)
+import Data.Reflection (Given, given)
 
 import Chimera.Core.World
 import Chimera.Scripts
 import Chimera.Scripts.Common
 
-stage1 :: Stage ()
+stage1 :: (Given Resource) => Stage ()
 stage1 = do
   talk $ do
     say' $ aline "メッセージのテスト"
@@ -53,7 +55,7 @@ stage1 = do
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss2
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss1
 
-zako :: Int -> Danmaku EnemyObject ()
+zako :: (Given Resource) => Int -> Danmaku EnemyObject ()
 zako n
   | n >= 20 = zakoCommon 0 (motionCommon 100 (Curve (acc $ n `mod` 10))) 50 Needle Purple
   | n >= 10 = zakoCommon 0 (motionCommon 100 Straight) 50 BallMedium (toEnum $ n `mod` 10)
@@ -64,19 +66,18 @@ zako n
     acc 1 = V2 0.05 0.005
     acc _ = error "otherwise case in acc"
 
-boss1 :: Danmaku EnemyObject ()
+boss1 :: (Given Resource) => Danmaku EnemyObject ()
 boss1 = do
   setName "回転弾"
   
   e <- self
   hook $ Left $ motionCommon 100 Stay
-  res <- getResource
-  when (e^.counter == 130) $ effs $ return $ effEnemyStart res (e^.pos)
+  when (e^.counter == 130) $ effs $ return $ effEnemyStart (e^.pos)
   when (e^.counter == 200) $ do
     mapM_ enemyEffect $ [
-      effEnemyAttack 0 res (e^.pos),
-      effEnemyAttack 1 res (e^.pos),
-      effEnemyAttack 2 res (e^.pos)]
+      effEnemyAttack 0 (e^.pos),
+      effEnemyAttack 1 (e^.pos),
+      effEnemyAttack 2 (e^.pos)]
   
   let def' = def & pos .~ e^.pos & ang .~ (fromIntegral $ e^.counter)/30
   when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
@@ -126,20 +127,19 @@ boss1 = do
         bcolor .= Purple
         modify makeBullet
 
-boss2 :: Danmaku EnemyObject ()
+boss2 :: (Given Resource) => Danmaku EnemyObject ()
 boss2 = do
   setName "分裂弾"
   
   e <- self
   hook $ Left $ motionCommon 100 Stay
-  res <- getResource
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $
     mapM_ enemyEffect $ [
-      effEnemyAttack 0 res (e^.pos),
-      effEnemyAttack 1 res (e^.pos),
-      effEnemyAttack 2 res (e^.pos)]
+      effEnemyAttack 0 (e^.pos),
+      effEnemyAttack 1 (e^.pos),
+      effEnemyAttack 2 (e^.pos)]
   
   when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
     shots $ (flip map) [0..5] $ \i ->
@@ -177,7 +177,7 @@ boss2 = do
           ang -= t
         when (cnt < 200) $ speed -= (fromIntegral $ time - cnt `mod` time)/1000
 
-boss3 :: Danmaku EnemyObject ()
+boss3 :: (Given Resource) => Danmaku EnemyObject ()
 boss3 = do
   setName "爆発弾"
 
@@ -186,10 +186,9 @@ boss3 = do
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
-    res <- getResource
-    enemyEffect $ effEnemyAttack 0 res (e^.pos)
-    enemyEffect $ effEnemyAttack 1 res (e^.pos)
-    enemyEffect $ effEnemyAttack 2 res (e^.pos)
+    enemyEffect $ effEnemyAttack 0 (e^.pos)
+    enemyEffect $ effEnemyAttack 1 (e^.pos)
+    enemyEffect $ effEnemyAttack 2 (e^.pos)
   
   let n = 8 :: Int
   let def' = def & pos .~ e^.pos & speed .~ 3 & kind .~ Needle
@@ -216,7 +215,7 @@ boss3 = do
           & bcolor .~ Blue
           & ang .~ fromIntegral i*2*pi/fromIntegral n
 
-boss4 :: Danmaku EnemyObject ()
+boss4 :: (Given Resource) => Danmaku EnemyObject ()
 boss4 = do
   setName "ホーミング弾"
 
@@ -225,10 +224,9 @@ boss4 = do
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
-    res <- getResource
-    enemyEffect $ effEnemyAttack 0 res (e^.pos)
-    enemyEffect $ effEnemyAttack 1 res (e^.pos)
-    enemyEffect $ effEnemyAttack 2 res (e^.pos)
+    enemyEffect $ effEnemyAttack 0 (e^.pos)
+    enemyEffect $ effEnemyAttack 1 (e^.pos)
+    enemyEffect $ effEnemyAttack 2 (e^.pos)
   
   let n = 3 :: Int
   let def' = def & pos .~ e^.pos & speed .~ 5 & kind .~ Oval

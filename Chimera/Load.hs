@@ -1,11 +1,9 @@
 {-# LANGUAGE TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
-module Chimera.Core.Load (
-  initResource
+module Chimera.Load (
+  loadResource
   , GetPicture, picture
   , charaImg, bulletImg, effectImg, board
-  , execLoad
   , BKind(..), BColor(..)
-  , areaBullet, getBulletBitmap
   ) where
 
 import FreeGame
@@ -55,10 +53,13 @@ initResource = do
 class GetPicture c where
   picture :: Resource -> c -> Bitmap
 
+loadResource :: Game Resource
+loadResource = initResource >>= execLoad
+
 execLoad :: Resource -> Game Resource
 execLoad res = do
---  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
---  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
+  forkFrame $ preloadBitmap $ (res ^. charaImg) V.! 0
+  forkFrame $ preloadBitmap $ (res ^. effectImg) V.! 0 V.! 0
 --  forkFrame $ F.mapM_ (F.mapM_ preloadBitmap) $ res ^. bulletImg
   return $ res
     & numbers .~ V.fromList ns
@@ -74,9 +75,6 @@ splitBulletBitmaps pic =
   V.fromList [V.fromList [clipBulletBitmap k c pic
                          | c <- [Red .. Magenta]] 
              | k <- [BallLarge .. Needle]]
-
-getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
-getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
 
 clipBulletBitmap :: BKind -> BColor -> Bitmap -> Bitmap
 clipBulletBitmap bk bc
@@ -95,14 +93,4 @@ clipBulletBitmap bk bc
 
     clip :: Int -> Int -> Int -> Int -> Bitmap -> Bitmap
     clip a b c d bmp = cropBitmap bmp (c,d) (a,b)
-
-areaBullet :: BKind -> Vec2
-areaBullet BallLarge = V2 15 15
-areaBullet BallMedium = V2 7 7
-areaBullet BallSmall = V2 4 4
-areaBullet Oval = V2 7 3
-areaBullet Diamond = V2 5 3
-areaBullet BallFrame = V2 5 5
-areaBullet Needle = V2 30 1
-areaBullet BallTiny = V2 2 2
 

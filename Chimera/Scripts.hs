@@ -22,6 +22,7 @@ import qualified Data.Vector as V
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
 import Data.Functor.Product
+import Data.Reflection (Given, given)
 
 import Chimera.Core.World
 import Chimera.Layers as M
@@ -146,15 +147,15 @@ effColored f g time e = e & runAuto %~ (>> go) where
       img .= (color (f x) . (e^.img))
     when (c == time) $ g
 
-effCommonAnimated :: Int -> Resource -> Vec2 -> Effect
-effCommonAnimated k res p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
-  run :: State EffectObject ()
+effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
+effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
   run = do
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)
     img .= \r -> bitmap $ (r^.effectImg) V.! k V.! i
     counter %= (+1)
-    when (i == V.length ((res^.effectImg) V.! k)) $ stateEffect .= Inactive
+    let resource = given :: Resource
+    when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive
 
 say' :: Expr -> Stage ()
 say' m = speak $ m <> clickend

@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, GADTs #-}
+{-# LANGUAGE TemplateHaskell, GADTs, FlexibleContexts #-}
 module Chimera where
 
 import FreeGame
@@ -7,10 +7,13 @@ import Control.Monad.State.Strict
 import Data.Maybe (isJust)
 import Data.Default (def)
 import qualified Data.Vector as V
+import Data.Reflection (Given, give, given)
 
 import Chimera.Engine
 import Chimera.Menu
 import Chimera.Scripts.Stage1
+import Chimera.Config (loadConfig)
+import Chimera.Load (loadResource)
 
 type GameLoop = StateT GameFrame Game
 
@@ -27,72 +30,51 @@ data GameFrame = GameFrame {
 
 makeLenses ''GameFrame
 
-menuloop :: GameLoop ()
+menuloop :: (Given Resource) => GameLoop ()
 menuloop = do
   menu' <- use menu
-  font' <- use (field.resource.font)
-  (m, s) <- (lift $ selectloop font' `runStateT` menu')
+  let resource = given :: Resource
+  (m, s) <- (lift $ selectloop (resource^.font) `runStateT` menu')
   maybe (return ()) (running .=) m
   menu .= s
 
-maploop :: Bitmap -> GameLoop ()
+maploop :: (Given Resource, Given Config) => Bitmap -> GameLoop ()
 maploop bmp = do
   lift $ translate (V2 320 240) $ bitmap bmp
   menu' <- use mapMenu
-  font' <- use (field.resource.font)
-  (m, s) <- (lift $ posloop font' `runStateT` menu')
-  when (isJust m) $ running .= loadloop
+  let resource = given :: Resource
+  (m, s) <- (lift $ posloop (resource^.font) `runStateT` menu')
+  when (isJust m) $ running .= stgloop
   mapMenu .= s
 
-loadloop :: GameLoop ()
-loadloop = do
-  font' <- use (field.resource.font)
-  field.resource <~ (lift . execLoad =<< use (field.resource))
---  lift $ waiting font' 0
+stepStage :: GameFrame -> GameLoop ()
+stepStage g = do
+  let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
+  field .= g'
+  stage .= s'
+  controller .= c'
 
-  running .= stgloop
-  where
-    waiting :: Font -> Int -> Game ()
-    waiting font' n = do
-      translate (V2 30 30) . color white . text font' 20 $ "読み込み中…" ++ show n
-      tick
-      when (n > 0) $ waiting font' $ n-1
-
-stgloop :: GameLoop ()
+stgloop :: (Given Resource, Given Config) => GameLoop ()
 stgloop = do
-  use field >>= \f -> lift $ paint (error "_") `execStateT` f
-  
-  _ <- do
-    field.player `zoom` actPlayer
-    when_ (isShooting `fmap` use controller) $ 
-      field %= execState addBullet
+  use field >>= lift . execStateT paint
+  field.player `zoom` actPlayer
+  when_ (isShooting `fmap` use controller) $ 
+    field %= execState addBullet
   field %= execState update
+
   use controller >>= \r -> case isShooting r of 
-    True -> do
-      g <- get
-      let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
-      field .= g'
-      stage .= s'
-      controller .= c'
+    True -> get >>= stepStage
     False -> running .= talkloop
   
-talkloop :: GameLoop ()
+talkloop :: (Given Resource, Given Config) => GameLoop ()
 talkloop = do
   stgloop
-  
-  _ <- do
-    me <- use mEngine
-    res <- use (field.resource)
-    lift $ paint res `execStateT` me
+
+  use mEngine >>= lift . execStateT paint
   mEngine %= execState update
   
   when_ ((== End) `fmap` use (mEngine.stateEngine)) $ do
-    g <- use id
-    let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
-    field .= g'
-    stage .= s'
-    controller .= c'
-    
+    get >>= stepStage
     use controller >>= \c -> id %= execState (runTalk c)
   when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ 
     when_ (keyChar 'Z') $ mEngine.stateEngine .= Parsing
@@ -100,11 +82,10 @@ talkloop = do
     when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $
       mEngine.stateEngine .= Parsing
     when_ ((== Printing) `fmap` use (mEngine.stateEngine)) $ do
-      p <- use (mEngine.printing)
-      mEngine.cursor .= (length p - 1)
+      use (mEngine.printing) >>= \p -> mEngine.cursor .= (length p - 1)
   
   where
-    runTalk :: Controller -> State GameFrame ()
+    runTalk :: (Given Resource) => Controller -> State GameFrame ()
     runTalk Talk = mEngine.stateEngine .= End
     runTalk (Speak s) = do
       mEngine.stateEngine .= Parsing
@@ -113,32 +94,35 @@ talkloop = do
     runTalk _ = return ()
 
 game :: IO (Maybe ())
-game = runGame Windowed (Box (V2 0 0) (V2 640 480)) $ do
-  setFPS 60
-  setTitle "Chimera"
-  clearColor $ Color 0 0 0.2 1.0
-  r <- initResource
-  let field' = def & resource .~ r & isDebug .~ False
-  m <- readBitmap "data/img/map0.png"
-  
-  let its = V.fromList [Item "Game Start" loadloop,
-                        Item "Go somewhere" (maploop m),
-                        Item "Quit" $ quit .= True]
-  
-  evalStateT mainloop GameFrame {
-                      _field = field',
-                      _menu = def & items .~ its,
-                      _mapMenu = def,
-                      _mEngine = def,
-                      _stage = stage1,
-                      _controller = Go,
-                      _running = menuloop, 
-                      _quit = False } where
-    mainloop :: GameLoop ()
+game = do
+  c <- loadConfig
+  give c $ do
+    let config = given :: Config
+    runGame (config^.windowMode) (config^.windowSize) $ do
+      setFPS 60
+      setTitle (config^.titleName)
+      clearColor $ Color 0 0 0.2 1.0
+      m <- readBitmap "data/img/map0.png"
+      r <- loadResource
+      give r $
+        let its = V.fromList [Item "Game Start" stgloop,
+                              Item "Go somewhere" (maploop m),
+                              Item "Quit" $ quit .= True] in
+        evalStateT mainloop GameFrame {
+                            _field = def,
+                            _menu = def & items .~ its,
+                            _mapMenu = def,
+                            _mEngine = def,
+                            _stage = stage1,
+                            _controller = Go,
+                            _running = menuloop, 
+                            _quit = False }
+
+  where
+    mainloop :: (Given Resource) => GameLoop ()
     mainloop = do
       join $ use running
     
       when_ (keyPress KeyEscape) $ quit .= True
-      q <- use quit
       tick
-      unless q mainloop
+      use quit >>= \q -> unless q mainloop

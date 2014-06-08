@@ -13,6 +13,7 @@ import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
 import Data.List (unfoldr)
 import Control.Monad.State.Strict
+import Data.Reflection (given)
 
 import Chimera.Core.Types
 import Chimera.Core.Util
@@ -34,9 +35,10 @@ instance Default Layer where
 
 instance GUIClass Layer where
   update = return ()
-  paint res = do
+  paint = do
     a <- get
     s <- use sizeLayer
+    let res = given :: Resource
     b <- ((\f -> f res) `fmap` use imgLayer)
     let s' = fmap fromIntegral $ uncurry V2 $ bitmapSize b
     translate (a^.posLayer) $ scale (s / s') $ bitmap b
@@ -124,9 +126,10 @@ instance GUIClass MessageEngine where
       m <- use printing
       when_ ((== length m) `fmap` use cursor) $ stateEngine .= Parsing
     
-  paint res = do
+  paint = do
     la <- use layer
-    lift $ paint res `execStateT` la
+    let res = given :: Resource
+    lift $ paint `execStateT` la
     c <- use cursor
     m <- use printing
     translate (topleft la) . color black . text (res^.font) 20 $ take c m

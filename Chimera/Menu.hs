@@ -102,9 +102,8 @@ posloop font = do
       Nothing -> return ()
   
   z <- keyDown $ charToKey 'Z'
-  (s,_) <- use pointing2 
   case z of
-    True -> return $ Just s
+    True -> (Just . fst) `fmap` use pointing2
     False -> return Nothing
   
   where

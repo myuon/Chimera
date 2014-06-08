@@ -2,13 +2,10 @@
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
 module Chimera.Core.Util (
-  areaTop, areaLeft, areaBottom, areaRight
-  , isInGame
-  , boxVertex, boxVertexRotated
+  boxVertex, boxVertexRotated
   , cutIntoN
   , when_, (><=)
   , rot2M, rotate2
-  , clamp
   , insertIM, insertIM'
   ) where
 
@@ -18,15 +15,6 @@ import Control.Monad.State.Strict (MonadState)
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
 
-areaTop, areaLeft, areaBottom, areaRight :: Double
-areaTop = 16
-areaLeft = 32
-areaBottom = 444
-areaRight = 416
-
-isInGame :: Vec2 -> Bool
-isInGame (V2 a b) = (areaLeft-40 <= a && a <= areaRight+40) && (areaTop-40 <= b && b <= areaBottom+40)
-
 boxVertex :: Vec2 -> Vec2 -> [Vec2]
 boxVertex pos size = [pos - size,
                       pos + V2 (size^._x) (-size^._y),
@@ -34,8 +22,8 @@ boxVertex pos size = [pos - size,
                       pos + V2 (-size^._x) (size^._y)]
 
 boxVertexRotated :: Vec2 -> Vec2 -> Double -> [Vec2]
-boxVertexRotated pos size angle = 
-  map (pos +) $ map (\v -> v `rotate2` angle) $ boxVertex 0 size
+boxVertexRotated pos size ang = 
+  map (pos +) $ map (\v -> v `rotate2` ang) $ boxVertex 0 size
 
 cutIntoN :: Int -> Bitmap -> [Bitmap]
 cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
@@ -55,15 +43,6 @@ rot2M r = let c = cos(-r); s = sin(-r) in
 
 rotate2 :: Vec2 -> Double -> Vec2
 rotate2 v r = rot2M r !* v
-
-clamp :: Vec2 -> Vec2
-clamp (V2 x y) = V2 (edgeX x) (edgeY y)
-  where
-    edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
-            (\p -> bool p areaRight (p > areaRight))
-    
-    edgeY = (\p -> bool p areaLeft (p < areaLeft)) .
-            (\p -> bool p areaBottom (p > areaBottom))
 
 insertIM :: a -> IM.IntMap a -> IM.IntMap a
 insertIM a m = snd $ insertIM' a m

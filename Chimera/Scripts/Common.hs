@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Chimera.Scripts.Common where
 
 import FreeGame
@@ -7,6 +8,7 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
 import qualified Data.Sequence as S
+import Data.Reflection (Given, given)
 
 import Chimera.Scripts
 import Chimera.Core.World
@@ -26,21 +28,21 @@ effFadeOut :: Int -> Effect -> Effect
 effFadeOut n e = let y x = cos $ (x*pi/2) in
   effColored (Color 1 1 1 . y) (img .= (color (Color 1 1 1 0) . (e^.img))) n e
 
-effEnemyDead :: Resource -> Vec2 -> Effect
+effEnemyDead :: (Given Resource) => Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
-effPlayerDead :: Resource -> Vec2 -> Effect
-effPlayerDead res = go . effCommonAnimated 1 res where
+effPlayerDead :: (Given Resource) => Vec2 -> Effect
+effPlayerDead = go . effCommonAnimated 1 where
   go :: Effect -> Effect
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
 
-effEnemyStart :: Resource -> Vec2 -> Effect
-effEnemyStart res = go . effCommonAnimated 2 res where 
+effEnemyStart :: (Given Resource) => Vec2 -> Effect
+effEnemyStart = go . effCommonAnimated 2 where 
   go :: Effect -> Effect
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> size *= 1.01)
     
-effEnemyAttack :: Int -> Resource -> Vec2 -> Effect
-effEnemyAttack i _ p =
+effEnemyAttack :: Int -> Vec2 -> Effect
+effEnemyAttack i p =
   pos .~ p $
   img .~ (\r -> bitmap $ (r^.effectImg) V.! 3 V.! i) $
   size .~ 0 $
@@ -148,8 +150,8 @@ debug = do
       bcolor .~ Red $
       def
 
-chaosBomb :: Resource -> Vec2 -> Bullet
-chaosBomb res p =
+chaosBomb :: (Given Resource) => Vec2 -> Bullet
+chaosBomb p =
   pos .~ p $
   kind .~ BallFrame $
   bcolor .~ Magenta $
@@ -159,10 +161,12 @@ chaosBomb res p =
   def
   
   where
-    bomb :: (HasObject c) => c -> Bullet -> Bullet
+    resource = given :: Resource
+
+    bomb :: (HasObject c, Given Resource) => c -> Bullet -> Bullet
     bomb e b = case b^.stateBullet == EnemyB && 
                     (e^.size^._x)^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb res (b^.pos) & size .~ V2 ((e^.size^._x) / 1.4) 0
+      True -> chaosBomb (b^.pos) & size .~ V2 ((e^.size^._x) / 1.4) 0
       False -> b
     
     run :: Danmaku BulletObject ()
@@ -178,8 +182,8 @@ chaosBomb res p =
         c <- use counter
         when (c == 10) $ stateBullet .= Outside
 
-    eff :: BulletObject -> Effect
-    eff b = go $ zIndex .~ Background $ effCommonAnimated 4 res (b^.pos) where
+    eff :: (Given Resource) => BulletObject -> Effect
+    eff b = go $ zIndex .~ Background $ effCommonAnimated 4 (b^.pos) where
       go :: Effect -> Effect
       go e = let ratio = (b^.size^._x) / 120 in
         e & size .~ V2 ratio ratio & slowRate .~ 3

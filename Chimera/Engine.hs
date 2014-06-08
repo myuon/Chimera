@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Chimera.Engine ( module M, addBullet ) where
 
 import FreeGame
@@ -10,8 +11,8 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
 import qualified Data.Foldable as F
+import Data.Reflection (Given, given)
 
-import Chimera.Core.Load as M
 import Chimera.Core.World as M
 import Chimera.Scripts as M
 import Chimera.Scripts.Common
@@ -22,7 +23,7 @@ instance GUIClass Field where
     danmakuTitle .= ""
     
     collideObj
-    use resource >>= deadEnemyEffects
+    deadEnemyEffects
     
     scanAutonomies enemy
     scanAutonomies bullets
@@ -35,33 +36,33 @@ instance GUIClass Field where
     where
       deadEnemies = S.filter ((== Dead) . (^.stateChara))
       
-      deadEnemyEffects res = do
+      deadEnemyEffects = do
         ds <- deadEnemies `fmap` use enemy
         F.forM_ ds $ \e -> do
-          effects %= insertIM (effEnemyDead res $ e^.pos)
+          effects %= insertIM (effEnemyDead $ e^.pos)
           F.forM_ (e^.effectIndexes) $ \i ->
             effects %= IM.adjust (execState $ stateEffect .= Inactive) i
       
-  paint _ = do
+  paint = do
     drawEffs Background
     drawObj
     drawEffs OnObject
     when_ (use isDebug) debugging
-    translate (V2 320 240) . bitmap =<< use (resource.board)
+    translate (V2 320 240) . bitmap $ resource ^. board
     drawMessages
     drawEffs Foreground
     when_ ((/= "") `fmap` use danmakuTitle) drawTitle
     
     where
+      resource = given :: Resource
+
       drawObj = do
-        res <- use resource
-        _ <- lift . execStateT (paint res) =<< use player
-        F.mapM_ (lift . execStateT (paint res)) =<< use bullets
-        F.mapM_ (lift . execStateT (paint res)) =<< use enemy
+        _ <- lift . execStateT paint =<< use player
+        F.mapM_ (lift . execStateT paint) =<< use bullets
+        F.mapM_ (lift . execStateT paint) =<< use enemy
       
       drawEffs z = do
-        res <- use resource
-        F.mapM_ (lift . execStateT (paint res)) . IM.filter (\r -> r^.zIndex == z)
+        F.mapM_ (lift . execStateT paint) . IM.filter (\r -> r^.zIndex == z)
           =<< use effects
       
       debugging = do
@@ -73,7 +74,7 @@ instance GUIClass Field where
                        boxVertex (e^.pos) (e^.size)) =<< use enemy
       
       drawMessages = do
-        ls <- use (resource.labels)
+        let ls = resource ^. labels
         
         lift $ translate (V2 430 30) $ ls M.! "fps"
         drawScore 30 =<< getFPS
@@ -97,24 +98,21 @@ instance GUIClass Field where
         drawScore 210 . IM.size =<< use effects
 
       drawScore y sc = do
-        nums <- use (resource.numbers)
         forM_ (zip (show $ maximum [sc, 0]) [1..]) $ \(n, i) -> 
           when (n /= '-') $
-            lift $ translate (V2 (550 + i*13) y) $ nums V.! digitToInt n
+            lift $ translate (V2 (550 + i*13) y) $ (resource^.numbers) V.! digitToInt n
       
       drawTitle = do
-        font' <- use (resource.font)
-        translate (V2 40 30) . text font' 10 =<< use danmakuTitle
+        translate (V2 40 30) . text (resource^.font) 10 =<< use danmakuTitle
 
-collideObj :: State Field ()
+collideObj :: (Given Resource) => State Field ()
 collideObj = do
   p <- use player
-  res <- use resource
-  let run' = run (createEffect res)
+  let run' = run createEffect
   
   (n, bs') <- runPair PlayerB p `fmap` use bullets
   player %= (hp -~ n)
-  when (n>0) $ effects %= (insertIM $ effPlayerDead res (p^.pos))
+  when (n>0) $ effects %= (insertIM $ effPlayerDead (p^.pos))
   
   (es', bs'', _) <- (\es -> return $ run' EnemyB es bs') =<< use enemy
   enemy .= es'
@@ -131,20 +129,19 @@ collideObj = do
     run :: (HasChara c, HasObject c) => 
            (StateBullet -> c -> Effect) -> StateBullet -> S.Seq c -> S.Seq Bullet -> 
            (S.Seq c, S.Seq Bullet, S.Seq Effect)
-    run eff s cseq bs = iter (S.viewl cseq) (S.empty, bs, S.empty) where
+    run eff s cseq bss = iter (S.viewl cseq) (S.empty, bss, S.empty) where
       iter S.EmptyL acc = acc
       iter (h S.:< rest) (cs, bs, es) = iter (S.viewl rest) (cs', bs', es') where
         (n, bs') = runPair s h bs
         cs' = (h & hp -~ n) S.<| cs
         es' = if n>0 then es else es S.|> eff s h
     
-    createEffect :: (HasChara c, HasObject c) => 
-                    Resource -> StateBullet -> c -> Effect
-    createEffect res PlayerB e = effPlayerDead res (e^.pos)
-    createEffect res EnemyB e = effPlayerDead res (e^.pos)
-    createEffect _ _ _ = error "otherwise case in createEffect"
+    createEffect :: (HasChara c, HasObject c, Given Resource) => StateBullet -> c -> Effect
+    createEffect PlayerB e = effPlayerDead (e^.pos)
+    createEffect EnemyB e = effPlayerDead (e^.pos)
+    createEffect _ _ = error "otherwise case in createEffect"
 
-addBullet :: State Field ()
+addBullet :: (Given Resource) => State Field ()
 addBullet = do
   keys <- use (player.keysPlayer)
   cnt <- use (player.counter)
@@ -158,8 +155,7 @@ addBullet = do
   
   when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0) $ do
     p <- use (player.pos)
-    res <- use resource
-    bullets ><= (S.singleton $ chaosBomb res $ p)
+    bullets ><= (S.singleton . chaosBomb $ p)
   
   where
     def' :: Bullet

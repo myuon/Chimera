@@ -13,19 +13,10 @@ import qualified Data.Sequence as S
 import qualified Data.Map as M
 import qualified Data.Traversable as T
 import Data.Functor.Product
+import Data.Reflection (given)
 
 import Chimera.Core.Types as M
 import Chimera.Core.Util as M
-import Chimera.Core.Load (picture, GetPicture, areaBullet, getBulletBitmap)
-
-instance GetPicture Player where
-  picture res _ = (res^.charaImg) V.! 0
-
-instance GetPicture Bullet where 
-  picture res b = getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
-
-instance GetPicture Enemy where
-  picture res _ = (res^.charaImg) V.! 1
 
 instance GUIClass Player where
   update = do
@@ -52,17 +43,19 @@ instance GUIClass Player where
         addTup (k M.! KeyLeft  > 0) (-1,0) $
         0
 
-  paint res = do
+  paint = do
     p <- get
-    draw $ translate (p^.pos) $ bitmap (picture res p)
+    let resource = given :: Resource
+    draw $ translate (p^.pos) $ bitmap $ (resource^.charaImg) V.! 0
 
 instance GUIClass Effect where
   update = do
     run <- use runAuto
     effectObject %= execState run
   
-  paint res = do
+  paint = do
     b <- get
+    let res = given :: Resource
     lift $ translate (b^.pos) $ rotateR (b^.ang) $ scale (b^.size) $ b^.img $ res
 
 instance GUIClass Bullet where
@@ -71,14 +64,24 @@ instance GUIClass Bullet where
     t <- use ang
     pos += rotate2 (V2 r 0) t
     p <- use pos
-    unless (isInGame p) $ stateBullet .= Outside
+    unless (p `isInside` expand (config^.gameArea) (Box (-40) 40)) $ stateBullet .= Outside
 
-  paint res = do
+    where
+      config = given :: Config
+
+      expand (Box v1 v2) (Box v3 v4) = Box (v1+v2) (v3+v4)
+
+  paint = do
+    let res = given :: Resource
     b <- get
     case b^.size^._x /= b^.size^._y of
       True -> draw $ translate (b^.pos) $ 
-              rotateR (b^.ang + pi/2) $ bitmap (picture res b)
-      False -> draw $ translate (b^.pos) $ bitmap (picture res b)
+              rotateR (b^.ang + pi/2) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
+      False -> draw $ translate (b^.pos) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
+
+    where
+      getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
+      getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
 
 instance GUIClass Enemy where
   update = do
@@ -88,9 +91,10 @@ instance GUIClass Enemy where
     h <- use hp
     when (h <= 0) $ stateChara .= Dead
   
-  paint res = do
+  paint = do
+    let res = given :: Resource
     c <- get
-    draw $ translate (c^.pos) $ bitmap (picture res c)
+    draw $ translate (c^.pos) $ bitmap $ (res^.charaImg) V.! 1
 
 actPlayer :: StateT Player Game ()
 actPlayer = do
@@ -115,3 +119,12 @@ scanAutonomies member = do
              S.zip (f^.member) $ fmap (\(Pair a _) -> a) pairs)
   modify $ execState $ T.mapM (\(Pair _ b) -> b) pairs
 
+areaBullet :: BKind -> Vec2
+areaBullet BallLarge = V2 15 15
+areaBullet BallMedium = V2 7 7
+areaBullet BallSmall = V2 4 4
+areaBullet Oval = V2 7 3
+areaBullet Diamond = V2 5 3
+areaBullet BallFrame = V2 5 5
+areaBullet Needle = V2 30 1
+areaBullet BallTiny = V2 2 2
