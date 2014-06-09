@@ -5,4 +5,4 @@ Chimera
 Danmaku Shooting Game
 - demo movies: [http://www.youtube.com/playlist?list=PL7W2NEs_QsrBVeBuMqqAKq4Awod7QPiN8](http://www.youtube.com/playlist?list=PL7W2NEs_QsrBVeBuMqqAKq4Awod7QPiN8)
 
-*NOTE* Though source is provided under MIT, Data files in `/data/` is NOT.
+*NOTE* Though source is provided under MIT, data files in `/data/` are NOT.
