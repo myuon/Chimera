@@ -8,7 +8,7 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
 import qualified Data.Sequence as S
-import Data.Reflection (Given, given)
+import Data.Reflection (Given)
 
 import Chimera.Core.Types
 import Chimera.Scripts
@@ -161,8 +161,6 @@ chaosBomb p =
   def
   
   where
-    resource = given :: Resource
-
     bomb :: (HasObject c, Given Resource) => c -> Bullet -> Bullet
     bomb e b = case b^.stateBullet == EnemyB && 
                     (e^.size^._x)^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
@@ -187,6 +185,20 @@ chaosBomb p =
       go :: Effect -> Effect
       go e = let ratio = (b^.size^._x) / 120 in
         e & size .~ V2 ratio ratio & slowRate .~ 3
+
+silentBomb :: (Given Resource) => State Chara (S.Seq Bullet)
+silentBomb = use pos >>= return . S.singleton . chaosBomb
+
+fourDiamond :: (Given Resource) => State Chara (S.Seq Bullet)
+fourDiamond = use pos >>= \p -> return $ S.fromList $
+  [def' & pos .~ p + V2 5 0,
+   def' & pos .~ p + V2 15 0,
+   def' & pos .~ p - V2 5 0,
+   def' & pos .~ p - V2 15 0]
+  where
+    def' = makeBullet $ 
+      def & speed .~ 15 & ang .~ pi/2 & kind .~ Diamond
+          & bcolor .~ Red & stateBullet .~ PlayerB
 
 stageTest :: Stage ()
 stageTest = do

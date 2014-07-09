@@ -24,7 +24,7 @@ import Chimera.Core.Util as M
 import Chimera.Core.Layers as M
 import Chimera.Core.Menu as M
 import Chimera.Scripts as M
-import Chimera.Scripts.Common
+import Chimera.Scripts.Common as M
 
 instance GUIClass Player where
   update = do
@@ -250,24 +250,11 @@ addBullet = do
   keys <- use (player.keysPlayer)
   cnt <- use (player.counter)
   when (keys M.! charToKey 'Z' > 0 && cnt `mod` 10 == 0) $ do
-    p <- use (player.pos)
-    bullets ><= (S.fromList
-      [def' & pos .~ p + V2 5 0,
-       def' & pos .~ p + V2 15 0,
-       def' & pos .~ p - V2 5 0,
-       def' & pos .~ p - V2 15 0])
+    s <- use (player.shotZ)
+    p <- use (player.charaPlayer)
+    bullets ><= evalState s p
   
   when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0) $ do
-    p <- use (player.pos)
-    bullets ><= (S.singleton . chaosBomb $ p)
-  
-  where
-    def' :: Bullet
-    def' = 
-      makeBullet $
-      speed .~ 15 $
-      ang .~ pi/2 $ 
-      kind .~ Diamond $
-      bcolor .~ Red $
-      stateBullet .~ PlayerB $
-      def
+    s <- use (player.shotX)
+    p <- use (player.charaPlayer)
+    bullets ><= evalState s p

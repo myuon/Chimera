@@ -16,6 +16,7 @@ import Data.Functor.Product
 import Data.Reflection (Given, given)
 
 import Chimera.Core.Util
+import Chimera.Core.Menu (SelectMap)
 
 data Autonomie m a = Autonomie a (m ())
 
@@ -50,6 +51,12 @@ data Config = Config {
   _debugMode :: Bool,
   _titleName :: String
   }
+
+data GameConfig = GameConfig {
+  _defPlayer :: Player,
+  _defSelectMap :: SelectMap,
+  _defMapBitmap :: Bitmap
+}
 
 data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
@@ -101,7 +108,9 @@ data EnemyObject = EnemyObject {
 
 data Player = Player {
   _charaPlayer :: Chara,
-  _keysPlayer :: M.Map Key Int
+  _keysPlayer :: M.Map Key Int,
+  _shotZ :: (Given Resource) => State Chara (S.Seq Bullet),
+  _shotX :: (Given Resource) => State Chara (S.Seq Bullet)
   }
 
 data Field = Field {
@@ -122,6 +131,7 @@ type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
 
 makeSingletons ''Pattern 
 makeLenses ''Config
+makeLenses ''GameConfig
 makeLenses ''Resource
 makeClassy ''Object
 makeClassy ''Chara
@@ -208,7 +218,9 @@ instance Default Player where
       size .~ V2 5 5 $
       hp .~ 10 $
       def,
-    _keysPlayer = M.fromList $ zip keyList [0..]
+    _keysPlayer = M.fromList $ zip keyList [0..],
+    _shotZ = error "uninitialized shotZ",
+    _shotX = error "uninitialized shotX"
     }
 
 instance Default Field where

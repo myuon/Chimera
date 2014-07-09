@@ -11,7 +11,7 @@ import Data.Reflection (Given, give, given)
 
 import Chimera.World
 import Chimera.Scripts.Stage1
-import Chimera.Config (loadConfig)
+import Chimera.Config
 import Chimera.Load (loadResource)
 
 type GameLoop = StateT GameFrame Game
@@ -55,7 +55,7 @@ stepStage g = do
 
 stgloop :: (Given Resource, Given Config) => GameLoop ()
 stgloop = do
-  use field >>= lift . execStateT paint
+  _ <- use field >>= lift . execStateT paint
   field.player `zoom` actPlayer
   when_ (isShooting `fmap` use controller) $ 
     field %= execState addBullet
@@ -69,9 +69,9 @@ talkloop :: (Given Resource, Given Config) => GameLoop ()
 talkloop = do
   stgloop
 
-  use mEngine >>= lift . execStateT paint
+  _ <- use mEngine >>= lift . execStateT paint
   mEngine %= execState update
-  
+
   when_ ((== End) `fmap` use (mEngine.stateEngine)) $ do
     get >>= stepStage
     use controller >>= \c -> id %= execState (runTalk c)
@@ -95,29 +95,30 @@ talkloop = do
 game :: IO (Maybe ())
 game = do
   c <- loadConfig
-  give c $ do
-    let config = given :: Config
-    runGame (config^.windowMode) (config^.windowSize) $ do
-      setFPS 60
-      setTitle (config^.titleName)
-      clearColor $ Color 0 0 0.2 1.0
-      m <- readBitmap "data/img/map0.png"
-      r <- loadResource
-      give r $
-        let its = V.fromList [Item "Game Start" stgloop,
-                              Item "Go somewhere" (maploop m),
-                              Item "Quit" $ quit .= True] in
-        evalStateT mainloop GameFrame {
-                            _field = def,
-                            _menu = def & items .~ its,
-                            _mapMenu = def,
-                            _mEngine = def,
-                            _stage = stage1,
-                            _controller = Go,
-                            _running = menuloop, 
-                            _quit = False }
+  runGame (c^.windowMode) (c^.windowSize) $ do
+    setFPS 60
+    setTitle (c^.titleName)
+    clearColor $ Color 0 0 0.2 1.0
+    r <- loadResource
+    s <- give r loadGameConfig
+    give r $ give c $
+      evalStateT mainloop GameFrame {
+        _field = def & player .~ (s^.defPlayer),
+        _menu = def & items .~ menuItems (s^.defMapBitmap),
+        _mapMenu = s^.defSelectMap,
+        _mEngine = def,
+        _stage = stage1,
+        _controller = Go,
+        _running = menuloop,
+        _quit = False }
 
   where
+    menuItems :: (Given Config, Given Resource) => Bitmap -> V.Vector (Item GameLoop)
+    menuItems m = V.fromList [
+      Item "Game Start" stgloop,
+      Item "Go somewhere" (maploop m),
+      Item "Quit" $ quit .= True]
+
     mainloop :: (Given Resource) => GameLoop ()
     mainloop = do
       join $ use running
