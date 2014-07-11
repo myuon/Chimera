@@ -24,7 +24,8 @@ data GameFrame = GameFrame {
   _menu :: Select GameLoop,
   _mapMenu :: SelectMap,
   _mEngine :: MessageEngine,
-  _quit :: Bool
+  _quit :: Bool,
+  _memory :: Memory
   }
 
 makeLenses ''GameFrame
@@ -41,8 +42,8 @@ maploop :: (Given Resource, Given Config) => Bitmap -> GameLoop ()
 maploop bmp = do
   lift $ translate (V2 320 240) $ bitmap bmp
   menu' <- use mapMenu
-  let resource = given :: Resource
-  (m, s) <- (lift $ posloop (resource^.font) `runStateT` menu')
+  keys <- use (memory.cities)
+  (m, s) <- (lift $ posloop ((given :: Resource)^.font) keys `runStateT` menu')
   when (isJust m) $ running .= stgloop
   mapMenu .= s
 
@@ -72,15 +73,17 @@ talkloop = do
   _ <- use mEngine >>= lift . execStateT paint
   mEngine %= execState update
 
-  when_ ((== End) `fmap` use (mEngine.stateEngine)) $ do
+  s <- use (mEngine.stateEngine)
+  when (s == End) $ do
     get >>= stepStage
     use controller >>= \c -> id %= execState (runTalk c)
-  when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $ 
-    when_ (keyChar 'Z') $ mEngine.stateEngine .= Parsing
-  when_ (keyPress KeyLeftControl) $ do
-    when_ ((== Waiting) `fmap` use (mEngine.stateEngine)) $
+  when (s == Waiting) $ do
+    mEngine.stateEngine .= Parsing
+
+  keyPress KeyLeftControl >>= \k -> when k $ do
+    when (s == Waiting) $
       mEngine.stateEngine .= Parsing
-    when_ ((== Printing) `fmap` use (mEngine.stateEngine)) $ do
+    when (s == Printing) $ do
       use (mEngine.printing) >>= \p -> mEngine.cursor .= (length p - 1)
   
   where
@@ -110,7 +113,8 @@ game = do
         _stage = stage1,
         _controller = Go,
         _running = menuloop,
-        _quit = False }
+        _quit = False,
+        _memory = (s^.defMemory) }
 
   where
     menuItems :: (Given Config, Given Resource) => Bitmap -> V.Vector (Item GameLoop)

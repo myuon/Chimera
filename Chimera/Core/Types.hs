@@ -55,7 +55,8 @@ data Config = Config {
 data GameConfig = GameConfig {
   _defPlayer :: Player,
   _defSelectMap :: SelectMap,
-  _defMapBitmap :: Bitmap
+  _defMapBitmap :: Bitmap,
+  _defMemory :: Memory
 }
 
 data Resource = Resource {
@@ -69,6 +70,10 @@ data Resource = Resource {
   _numbers :: V.Vector (Game ()),
   _labels :: M.Map String (Game ())
   }
+
+data Memory = Memory {
+  _cities :: [String]
+}
 
 data Object = Object {
   _pos :: Vec2,
@@ -133,6 +138,7 @@ makeSingletons ''Pattern
 makeLenses ''Config
 makeLenses ''GameConfig
 makeLenses ''Resource
+makeLenses ''Memory
 makeClassy ''Object
 makeClassy ''Chara
 makeClassy ''EffectObject

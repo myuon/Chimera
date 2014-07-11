@@ -25,3 +25,4 @@ loadGameConfig = do
     & defPlayer .~ def { _shotZ = fourDiamond, _shotX = silentBomb }
     & defSelectMap .~ SelectMap { _mapinfo = marf, _pointing2 = ("マーフの街", V2 468 371) }
     & defMapBitmap .~ m
+    & defMemory .~ Memory { _cities = ["マーフの街"] }

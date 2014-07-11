@@ -37,19 +37,20 @@ selectloop font = do
   let write y = translate (V2 100 (200+y)) . color white . text font 20
   mapM_ (\i -> write (fromIntegral (i+1)*30) $ (its V.! i)^.caption) [0..V.length its-1]
   
-  p <- use pointing
-  translate (V2 70 (200+fromIntegral (p+1)*30)) . color white . text font 20 $ "|>"
+  use pointing >>= \p ->
+    translate (V2 70 (200+fromIntegral (p+1)*30)) . color white . text font 20 $ "|>"
   
-  when_ (keyDown KeyDown) $ pointing += 1
-  when_ (keyDown KeyUp) $ pointing -= 1
+  keyDown KeyDown >>= \k -> when k $ pointing += 1
+  keyDown KeyUp >>= \k -> when k $ pointing -= 1
   
-  when_ ((<0) `fmap` use pointing) $ pointing .= 0
-  when_ ((> V.length its - 1) `fmap` use pointing) $ pointing .= (V.length its - 1)
+  use pointing >>= \p -> do
+    when (p < 0) $ pointing .= 0
+    when (p > V.length its - 1) $ pointing .= (V.length its - 1)
   
-  z <- keyChar 'Z'
-  case z of
-    True -> return $ Just $ its V.! p ^. exec
-    False -> return Nothing
+    keyChar 'Z' >>= \z ->
+      case z of
+        True -> return $ Just $ its V.! p ^. exec
+        False -> return Nothing
 
 type MapInfo = M.Map String (Vec2, M.Map Key String)
 
@@ -60,25 +61,24 @@ data SelectMap = SelectMap {
 
 makeLenses ''SelectMap
 
-posloop :: Font -> StateT SelectMap Game (Maybe String)
-posloop font = do
+posloop :: Font -> [String] -> StateT SelectMap Game (Maybe String)
+posloop font keys = do
   (s,p) <- use pointing2
   m <- use mapinfo
   
   forM_ (wires s m) $ \(x,y) ->
     color white . thickness 2 . line $ [x,y]
 
-  translate (p + 3) . color (Color 0.4 0.4 0.4 1.0) . text font 20 $ s
+  translate (p + 2) . color (Color 0.4 0.4 0.4 0.7) . text font 20 $ s
   translate p . color white . text font 20 $ s
   
   let keyMap = snd $ m M.! s
   forM_ [KeyUp, KeyRight, KeyDown, KeyLeft] $ \k ->
-    when_ (keyDown k) $ case k `M.lookup` keyMap of
-      Just u -> pointing2 .= (u, fst $ m M.! u)
+    keyDown k >>= \b -> when b $ case k `M.lookup` keyMap of
+      Just u -> when (u `elem` keys) $ pointing2 .= (u, fst $ m M.! u)
       Nothing -> return ()
   
-  z <- keyDown $ charToKey 'Z'
-  case z of
+  keyDown (charToKey 'Z') >>= \z -> case z of
     True -> (Just . fst) `fmap` use pointing2
     False -> return Nothing
   
