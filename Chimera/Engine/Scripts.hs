@@ -2,8 +2,8 @@
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeOperators, DataKinds, Rank2Types #-}
 module Chimera.Engine.Scripts (
-  Controller(..), Stage, runStage, isShooting
-  , appearAt, keeper
+  Controller(..), Stage, isShooting, isStageRunning
+  , runController, appearAt, keeper
   , getPlayer, shots, wait, addEffect, effs
   , effColored -- , effCommonAnimated
   , talk, say', say
@@ -14,11 +14,10 @@ import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict
 import Control.Monad.Operational.Mini
-import Control.Monad.Reader (ask, runReader, Reader)
+import Control.Monad.Reader
 import Data.Monoid ((<>))
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
-import Data.Functor.Product
 import Data.Reflection (Given, given)
 
 import Chimera.Engine.Core
@@ -26,22 +25,6 @@ import Chimera.Engine.Core
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 
 type Stage = LookAt Controller Field
-
-runStage :: Controller -> Stage () -> State Field (Controller, Stage ())
-runStage ctrl stg = do
-  ctrl <- runReader (runController ctrl) `fmap` use id
-  case isStageRunning ctrl of
-    True -> do
-      (k, f') <- tickStage `fmap` use id
-      id .= f'
-      return k
-    False -> return (ctrl, stg)
-  
-  where
-    run p q m = runLookAt p q m `runState` Pair (return ()) (return ())
-    
-    tickStage field = let (stg', Pair f g) = run ctrl field stg in
-      ((f `execState` ctrl, stg'), g `execState` field)
 
 runController :: Controller -> Reader Field Controller
 runController (Wait n) = case n == 0 of

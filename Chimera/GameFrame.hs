@@ -4,10 +4,12 @@ module Chimera.GameFrame (game) where
 import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict
+import Control.Monad.Reader
 import Data.Maybe (isJust)
 import Data.Default (def)
 import qualified Data.Vector as V
 import Data.Reflection (Given, give, given)
+import Data.Functor.Product
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
@@ -30,6 +32,18 @@ data GameFrame = GameFrame {
 
 makeLenses ''GameFrame
 
+runStage :: GameLoop ()
+runStage = do
+  c <- liftM2 (\c -> runReader (runController c)) (use controller) (use field)
+  when (isStageRunning c) $ do
+    (s, Pair f g) <- liftM3 run (use controller) (use field) (use stage)
+    stage .= s
+    field %= execState g
+    controller %= execState f
+
+  where
+    run p q m = runLookAt p q m `runState` Pair (return ()) (return ())
+
 menuloop :: (Given Resource) => GameLoop ()
 menuloop = do
   menu' <- use menu
@@ -47,13 +61,6 @@ maploop bmp = do
   when (isJust m) $ running .= stgloop
   mapMenu .= s
 
-stepStage :: GameFrame -> GameLoop ()
-stepStage g = do
-  let ((c', s'), g') = runStage (g^.controller) (g^.stage) `runState` (g^.field)
-  field .= g'
-  stage .= s'
-  controller .= c'
-
 stgloop :: (Given Resource, Given Config) => GameLoop ()
 stgloop = do
   _ <- use field >>= lift . execStateT paint
@@ -63,7 +70,7 @@ stgloop = do
   field %= execState update
 
   use controller >>= \r -> case isShooting r of 
-    True -> get >>= stepStage
+    True -> runStage
     False -> running .= talkloop
   
 talkloop :: (Given Resource, Given Config) => GameLoop ()
@@ -75,7 +82,7 @@ talkloop = do
 
   use (mEngine.stateEngine) >>= \s -> do
     when (s == End) $ do
-      get >>= stepStage
+      runStage
       use controller >>= \c -> id %= execState (runTalk c)
 
   use (mEngine.stateEngine) >>= \s -> do
