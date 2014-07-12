@@ -1,11 +1,11 @@
 {-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
 {-# LANGUAGE TypeOperators, DataKinds, Rank2Types #-}
-module Chimera.Scripts (
+module Chimera.Engine.Scripts (
   Controller(..), Stage, runStage, isShooting
   , appearAt, keeper
   , getPlayer, shots, wait, addEffect, effs
-  , effColored, effCommonAnimated
+  , effColored -- , effCommonAnimated
   , talk, say', say
   , setName
   ) where
@@ -16,16 +16,12 @@ import Control.Monad.State.Strict
 import Control.Monad.Operational.Mini
 import Control.Monad.Reader (ask, runReader, Reader)
 import Data.Monoid ((<>))
-import Data.Default (def)
-import qualified Data.Vector as V
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
 import Data.Functor.Product
 import Data.Reflection (Given, given)
 
-import Chimera.Core.Util
-import Chimera.Core.Types
-import Chimera.Core.Layers
+import Chimera.Engine.Core
 
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 
@@ -147,6 +143,7 @@ effColored f g time e = e & runAuto %~ (>> go) where
       img .= (color (f x) . (e^.img))
     when (c == time) $ g
 
+{-
 effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
 effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
   run = do
@@ -156,6 +153,7 @@ effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run whe
     counter %= (+1)
     let resource = given :: Resource
     when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive
+-}
 
 say' :: Expr -> Stage ()
 say' m = speak $ m <> clickend

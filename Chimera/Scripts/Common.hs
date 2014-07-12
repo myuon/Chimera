@@ -10,8 +10,8 @@ import qualified Data.IntMap as IM
 import qualified Data.Sequence as S
 import Data.Reflection (Given)
 
-import Chimera.Core.Types
-import Chimera.Scripts
+import Chimera.Engine.Core
+import Chimera.Engine.Scripts
 
 data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
@@ -28,6 +28,7 @@ effFadeOut :: Int -> Effect -> Effect
 effFadeOut n e = let y x = cos $ (x*pi/2) in
   effColored (Color 1 1 1 . y) (img .= (color (Color 1 1 1 0) . (e^.img))) n e
 
+{-
 effEnemyDead :: (Given Resource) => Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
@@ -35,6 +36,7 @@ effPlayerDead :: (Given Resource) => Vec2 -> Effect
 effPlayerDead = go . effCommonAnimated 1 where
   go :: Effect -> Effect
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
+-}
 
 effEnemyStart :: (Given Resource) => Vec2 -> Effect
 effEnemyStart = go . effCommonAnimated 2 where 

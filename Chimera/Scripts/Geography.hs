@@ -3,7 +3,7 @@ module Chimera.Scripts.Geography where
 import FreeGame
 import qualified Data.Map as M
 
-import Chimera.Core.Menu
+import Chimera.Engine.Core
 
 marf :: MapInfo
 marf = M.fromList [

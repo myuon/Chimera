@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell, GADTs, FlexibleContexts #-}
-module Chimera where
+module Chimera.GameFrame (game) where
 
 import FreeGame
 import Control.Lens
@@ -9,10 +9,10 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import Data.Reflection (Given, give, given)
 
-import Chimera.World
+import Chimera.Engine.Core
+import Chimera.Engine.Scripts
 import Chimera.Scripts.Stage1
 import Chimera.Config
-import Chimera.Load (loadResource)
 
 type GameLoop = StateT GameFrame Game
 
@@ -58,7 +58,7 @@ stgloop :: (Given Resource, Given Config) => GameLoop ()
 stgloop = do
   _ <- use field >>= lift . execStateT paint
   field.player `zoom` actPlayer
-  when_ (isShooting `fmap` use controller) $ 
+  use controller >>= \c -> when (isShooting c) $ 
     field %= execState addBullet
   field %= execState update
 
@@ -73,18 +73,22 @@ talkloop = do
   _ <- use mEngine >>= lift . execStateT paint
   mEngine %= execState update
 
-  s <- use (mEngine.stateEngine)
-  when (s == End) $ do
-    get >>= stepStage
-    use controller >>= \c -> id %= execState (runTalk c)
-  when (s == Waiting) $ do
-    mEngine.stateEngine .= Parsing
+  use (mEngine.stateEngine) >>= \s -> do
+    when (s == End) $ do
+      get >>= stepStage
+      use controller >>= \c -> id %= execState (runTalk c)
+
+  use (mEngine.stateEngine) >>= \s -> do
+    keyChar 'Z' >>= \z -> when (z && s == Waiting) $ do
+      mEngine.stateEngine .= Parsing
 
   keyPress KeyLeftControl >>= \k -> when k $ do
-    when (s == Waiting) $
-      mEngine.stateEngine .= Parsing
-    when (s == Printing) $ do
-      use (mEngine.printing) >>= \p -> mEngine.cursor .= (length p - 1)
+    use (mEngine.stateEngine) >>= \s -> do
+      when (s == Waiting) $
+        mEngine.stateEngine .= Parsing
+    use (mEngine.stateEngine) >>= \s -> do
+      when (s == Printing) $ do
+        use (mEngine.printing) >>= \p -> mEngine.cursor .= (length p - 1)
   
   where
     runTalk :: (Given Resource) => Controller -> State GameFrame ()
@@ -95,7 +99,7 @@ talkloop = do
     runTalk Go = running .= stgloop
     runTalk _ = return ()
 
-game :: IO (Maybe ())
+game :: IO ()
 game = do
   c <- loadConfig
   runGame (c^.windowMode) (c^.windowSize) $ do
@@ -115,6 +119,7 @@ game = do
         _running = menuloop,
         _quit = False,
         _memory = (s^.defMemory) }
+  return ()
 
   where
     menuItems :: (Given Config, Given Resource) => Bitmap -> V.Vector (Item GameLoop)
@@ -127,6 +132,6 @@ game = do
     mainloop = do
       join $ use running
     
-      when_ (keyPress KeyEscape) $ quit .= True
+      keyPress KeyEscape >>= \k -> when k $ quit .= True
       tick
       use quit >>= \q -> unless q mainloop

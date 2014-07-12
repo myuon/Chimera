@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.Core.Menu where
+module Chimera.Engine.Core.Menu where
 
 import FreeGame
 import Control.Lens
@@ -9,7 +9,7 @@ import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.Foldable as F
 
-import Chimera.Core.Util
+import Chimera.Engine.Core.Util
 
 data Item m = Item {
   _caption :: String,

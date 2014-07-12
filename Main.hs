@@ -1,2 +1,2 @@
-import Chimera
+import Chimera.GameFrame
 main = game

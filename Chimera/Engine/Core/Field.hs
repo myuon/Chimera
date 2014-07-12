@@ -1,30 +1,196 @@
+{-# LANGUAGE TemplateHaskell, Rank2Types, FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts, RankNTypes #-}
-module Chimera.World (
-  actPlayer, runDanmaku, scanAutonomies, addBullet
-  , module M
-  ) where
+module Chimera.Engine.Core.Field where
 
 import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict
-import Data.Char (digitToInt)
-import Data.Default (def)
-import qualified Data.Vector as V
 import qualified Data.Sequence as S
+import qualified Data.Vector as V
 import qualified Data.Map as M
-import qualified Data.Traversable as T
-import qualified Data.IntMap.Strict as IM
+import qualified Data.IntMap as IM
 import qualified Data.Foldable as F
+import qualified Data.Traversable as T
+import Data.Reflection
+import Data.Default
+import Data.Char (digitToInt)
 import Data.Functor.Product
-import Data.Reflection (Given, given)
 
-import Chimera.Core.Types as M
-import Chimera.Core.Util as M
-import Chimera.Core.Layers as M
-import Chimera.Core.Menu as M
-import Chimera.Scripts as M
-import Chimera.Scripts.Common as M
+import Chimera.Engine.Core.Util
+import Chimera.Engine.Core.Types
+
+data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
+data ZIndex = Background | OnObject | Foreground deriving (Eq, Show)
+data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
+data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
+             Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
+data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+  deriving (Eq, Ord, Enum, Show)
+
+data Chara = Chara {
+  _objectChara :: Object,
+  _stateChara :: StateChara,
+  _hp :: Int
+  }
+
+data EffectObject = EffectObject {
+  _objectEffect :: Object,
+  _stateEffect :: StateEffect,
+  _slowRate :: Int,
+  _img :: Resource -> Game (),
+  _zIndex :: ZIndex
+  }
+
+data BulletObject = BulletObject {
+  _objectBullet :: Object,
+  _stateBullet :: StateBullet,
+  _kind :: BKind,
+  _bcolor :: BColor
+  } deriving (Eq, Show)
+
+data EnemyObject = EnemyObject {
+  _charaEnemy :: Chara,
+  _effectIndexes :: S.Seq Int
+  }
+
+data Player = Player {
+  _charaPlayer :: Chara,
+  _keysPlayer :: M.Map Key Int,
+  _shotZ :: (Given Resource) => State Chara (S.Seq Bullet),
+  _shotX :: (Given Resource) => State Chara (S.Seq Bullet)
+  }
+
+data Field = Field {
+  _player :: Player,
+  _enemy :: S.Seq Enemy,
+  _bullets :: S.Seq Bullet,
+  _effects :: IM.IntMap Effect,
+  _counterF :: Int,
+  _isDebug :: Bool,
+  _danmakuTitle :: String
+  }
+
+type Effect = Autonomie (State EffectObject) EffectObject
+type Bullet = Autonomie (Danmaku BulletObject) BulletObject
+type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
+type Danmaku c = LookAt c Field
+
+makeClassy ''Chara
+makeClassy ''EffectObject
+makeClassy ''BulletObject
+makeClassy ''EnemyObject
+makeLenses ''Player
+makeLenses ''Field
+
+instance HasObject Chara where object = objectChara
+instance HasObject EffectObject where object = objectEffect
+instance HasEffectObject Effect where effectObject = auto
+instance HasObject Effect where object = auto . objectEffect
+instance HasObject BulletObject where object = objectBullet
+instance HasChara EnemyObject where chara = charaEnemy
+instance HasObject EnemyObject where object = chara . object
+instance HasChara Player where chara = charaPlayer
+instance HasObject Player where object = chara . object
+instance HasObject Bullet where object = auto . object
+instance HasBulletObject Bullet where bulletObject = auto
+instance HasObject Enemy where object = auto . object
+instance HasChara Enemy where chara = auto . chara
+instance HasEnemyObject Enemy where enemyObject = auto
+
+instance Default Chara where
+  def = Chara { 
+    _objectChara = def,
+    _stateChara = Alive,
+    _hp = 0
+    }
+
+instance Default EffectObject where
+  def = EffectObject { 
+    _objectEffect = def, 
+    _stateEffect = Active,
+    _slowRate = 3,
+    _img = error "_img is not defined",
+    _zIndex = Background
+    }
+
+instance Default BulletObject where
+  def = BulletObject { 
+    _objectBullet = (size .~ V2 3 3 $ def),
+    _stateBullet = EnemyB,
+    _kind = BallMedium,
+    _bcolor = Red
+    }
+
+instance Default EnemyObject where
+  def = EnemyObject {
+    _charaEnemy =
+      spXY .~ V2 0 0 $
+      size .~ V2 15 15 $
+      def,
+    _effectIndexes = S.empty
+    }
+
+instance Default Player where
+  def = Player {
+    _charaPlayer =
+      pos .~ V2 320 420 $ 
+      speed .~ 2.5 $
+      size .~ V2 5 5 $
+      hp .~ 10 $
+      def,
+    _keysPlayer = M.fromList $ zip keyList [0..],
+    _shotZ = error "uninitialized shotZ",
+    _shotX = error "uninitialized shotX"
+    }
+
+instance Default Field where
+  def = Field {
+    _player = def,
+    _enemy = S.empty,
+    _bullets = S.empty,
+    _effects = IM.empty,
+    _counterF = 0,
+    _isDebug = False,
+    _danmakuTitle = ""
+    }
+
+collide :: (HasObject c, HasObject b) => c -> b -> Bool
+collide oc ob = let oc' = extend oc; ob' = extend ob; in
+  detect ob' oc' || detect oc' ob'
+  where
+    extend :: (HasObject c) => c -> c
+    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.ang) + (x^.spXY)
+--    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
+
+    detect :: (HasObject c, HasObject c') => c -> c' -> Bool
+    detect a b = 
+      let V2 w' h' = a^.size
+          r = \v -> rotate2 v $ a^.ang in
+      or [(a^.pos) `isIn` b,
+          (a^.pos + r (V2   w'    h' )) `isIn` b,
+          (a^.pos + r (V2 (-w')   h' )) `isIn` b,
+          (a^.pos + r (V2   w'  (-h'))) `isIn` b,
+          (a^.pos + r (V2 (-w') (-h'))) `isIn` b]
+    
+    isIn :: (HasObject c) => Vec2 -> c -> Bool
+    isIn p box = isInCentoredBox (p-box^.pos) where
+      isInCentoredBox :: Vec2 -> Bool
+      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
+        abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
+
+areaBullet :: BKind -> Vec2
+areaBullet BallLarge = V2 15 15
+areaBullet BallMedium = V2 7 7
+areaBullet BallSmall = V2 4 4
+areaBullet Oval = V2 7 3
+areaBullet Diamond = V2 5 3
+areaBullet BallFrame = V2 5 5
+areaBullet Needle = V2 30 1
+areaBullet BallTiny = V2 2 2
+
+makeBullet :: (HasObject c, HasBulletObject c) => c -> c
+makeBullet b = b & size .~ areaBullet (b^.kind)
 
 instance GUIClass Player where
   update = do
@@ -131,11 +297,11 @@ instance GUIClass Field where
     drawEffs Background
     drawObj
     drawEffs OnObject
-    when_ (use isDebug) debugging
+    use isDebug >>= \m -> when m $ debugging
     translate (V2 320 240) . bitmap $ resource ^. board
     drawMessages
     drawEffs Foreground
-    when_ ((/= "") `fmap` use danmakuTitle) drawTitle
+    use danmakuTitle >>= \t -> when (t /= "") drawTitle
     
     where
       resource = given :: Resource
@@ -188,6 +354,24 @@ instance GUIClass Field where
       
       drawTitle = do
         translate (V2 40 30) . text (resource^.font) 10 =<< use danmakuTitle
+
+keyList :: [Key]
+keyList = [
+  KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift,
+  charToKey 'Z', charToKey 'X']
+
+clamp :: (Given Config) => Vec2 -> Vec2
+clamp (V2 x y) = V2 (edgeX x) (edgeY y)
+  where
+    config = given :: Config
+
+    Box (V2 areaLeft areaTop) (V2 areaRight areaBottom) = config ^. gameArea
+
+    edgeX = (\p -> bool p areaLeft (p < areaLeft)) .
+            (\p -> bool p areaRight (p > areaRight))
+    
+    edgeY = (\p -> bool p areaTop (p < areaTop)) .
+            (\p -> bool p areaBottom (p > areaBottom))
 
 actPlayer :: StateT Player Game ()
 actPlayer = do
@@ -258,3 +442,21 @@ addBullet = do
     s <- use (player.shotX)
     p <- use (player.charaPlayer)
     bullets ><= evalState s p
+
+effPlayerDead :: (Given Resource) => Vec2 -> Effect
+effPlayerDead = go . effCommonAnimated 1 where
+  go :: Effect -> Effect
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
+
+effEnemyDead :: (Given Resource) => Vec2 -> Effect
+effEnemyDead = effCommonAnimated 0
+
+effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
+effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
+  run = do
+    f <- get
+    let i = (f^.counter) `div` (f^.slowRate)
+    img .= \r -> bitmap $ (r^.effectImg) V.! k V.! i
+    counter %= (+1)
+    let resource = given :: Resource
+    when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive

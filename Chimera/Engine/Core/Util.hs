@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances, FunctionalDependencies, ConstraintKinds #-}
 {-# LANGUAGE RankNTypes #-}
-module Chimera.Core.Util (
+module Chimera.Engine.Core.Util (
   boxVertex, boxVertexRotated
   , cutIntoN
-  , when_, (><=)
+  , (><=)
   , rot2M, rotate2
   , insertIM, insertIM'
   ) where
@@ -28,9 +28,6 @@ boxVertexRotated pos size ang =
 cutIntoN :: Int -> Bitmap -> [Bitmap]
 cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
   [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
-
-when_ :: (Monad m) => m Bool -> m () -> m ()
-when_ mp m = mp >>= (\b -> when b m)
 
 (><=) :: (MonadState s m) => 
          Setting (->) s s (S.Seq a) (S.Seq a) -> (S.Seq a) -> m ()

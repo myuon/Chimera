@@ -10,7 +10,8 @@ import Control.Monad.State.Strict (modify)
 import Data.Default (def)
 import Data.Reflection (Given, given)
 
-import Chimera.World
+import Chimera.Engine.Core
+import Chimera.Engine.Scripts
 import Chimera.Scripts.Common
 
 stage1 :: (Given Resource) => Stage ()

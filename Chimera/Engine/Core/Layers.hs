@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Chimera.Core.Layers ( 
+module Chimera.Engine.Core.Layers ( 
   Layer, tileImg
   , StateEngine(..), MessageEngine
   , Token(..), Expr(..), msingle
@@ -15,8 +15,8 @@ import Data.List (unfoldr)
 import Control.Monad.State.Strict
 import Data.Reflection (given)
 
-import Chimera.Core.Types
-import Chimera.Core.Util
+import Chimera.Engine.Core.Types
+import Chimera.Engine.Core.Util
 
 data Layer = Layer {
   _objLayer :: Object,
@@ -115,17 +115,20 @@ runExpr (t :+: es) = do
 
 instance GUIClass MessageEngine where
   update = do
-    when_ ((== Parsing) `fmap` use stateEngine) $ do
-      when_ ((== Empty) `fmap` use message) $ stateEngine .= End
-      m <- use message
-      runExpr m
-    when_ ((== Printing) `fmap` use stateEngine) $ do
-      counterEngine %= (+1)
-      t <- use typingTime
-      c <- use counterEngine
-      when (c `mod` t == 0) $ cursor %= (+1)
-      m <- use printing
-      when_ ((== length m) `fmap` use cursor) $ stateEngine .= Parsing
+    use stateEngine >>= \s -> do
+      when (s == Parsing) $ do
+        use message >>= \m -> do
+          when (m == Empty) $ stateEngine .= End
+          runExpr m
+    use stateEngine >>= \s -> do
+      when (s == Printing) $ do
+        counterEngine %= (+1)
+        t <- use typingTime
+        c <- use counterEngine
+        when (c `mod` t == 0) $ cursor %= (+1)
+        p <- use printing
+        k <- use cursor
+        when (k == length p) $ stateEngine .= Parsing
     
   paint = do
     la <- use layer
