@@ -34,12 +34,12 @@ makeLenses ''GameFrame
 
 runStage :: GameLoop ()
 runStage = do
-  c <- liftM2 (\c -> runReader (runController c)) (use controller) (use field)
-  when (isStageRunning c) $ do
+  controller <~ liftM2 (\c -> runReader (runController c)) (use controller) (use field)
+  use controller >>= \c -> when (isStageRunning c) $ do
     (s, Pair f g) <- liftM3 run (use controller) (use field) (use stage)
     stage .= s
     field %= execState g
-    controller %= execState f
+    controller .= execState f c
 
   where
     run p q m = runLookAt p q m `runState` Pair (return ()) (return ())
