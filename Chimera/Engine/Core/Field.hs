@@ -31,7 +31,8 @@ data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
 data Chara = Chara {
   _objectChara :: Object,
   _stateChara :: StateChara,
-  _hp :: Int
+  _hp :: Int,
+  _effectIndexes :: S.Seq Int
   }
 
 data EffectObject = EffectObject {
@@ -50,8 +51,7 @@ data BulletObject = BulletObject {
   } deriving (Eq, Show)
 
 data EnemyObject = EnemyObject {
-  _charaEnemy :: Chara,
-  _effectIndexes :: S.Seq Int
+  _charaEnemy :: Chara
   }
 
 data Player = Player {
@@ -102,7 +102,8 @@ instance Default Chara where
   def = Chara { 
     _objectChara = def,
     _stateChara = Alive,
-    _hp = 0
+    _hp = 0,
+    _effectIndexes = S.empty
     }
 
 instance Default EffectObject where
@@ -127,8 +128,7 @@ instance Default EnemyObject where
     _charaEnemy =
       spXY .~ V2 0 0 $
       size .~ V2 15 15 $
-      def,
-    _effectIndexes = S.empty
+      def
     }
 
 instance Default Player where
@@ -195,18 +195,13 @@ makeBullet b = b & size .~ areaBullet (b^.kind)
 instance GUIClass Player where
   update = do
     counter %= (+1)
-    do
-      sp <- use spXY
-      pos += sp
+    use spXY >>= \sp -> pos += sp
     spXY .= 0
     pos %= clamp
 
-    do
-      s <- use speed
-      k <- use keysPlayer
-      spXY .= case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
+    spXY <~ liftM2 (\s k -> case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
         True -> ((0.5 * s) *^ dir k)
-        False -> s *^ dir k
+        False -> s *^ dir k) (use speed) (use keysPlayer)
 
     where
       dir :: M.Map Key Int -> Vec2
@@ -249,10 +244,6 @@ instance GUIClass Bullet where
       True -> draw $ translate (b^.pos) $ 
               rotateR (b^.ang + pi/2) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
       False -> draw $ translate (b^.pos) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
-
-    where
-      getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
-      getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
 
 instance GUIClass Enemy where
   update = do
@@ -460,3 +451,6 @@ effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run whe
     counter %= (+1)
     let resource = given :: Resource
     when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive
+
+getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
+getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
