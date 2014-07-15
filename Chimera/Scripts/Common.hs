@@ -26,7 +26,12 @@ effFadeIn n e = let y x = sin $ x*(pi/2) in
 
 effFadeOut :: Int -> Effect -> Effect
 effFadeOut n e = let y x = cos $ (x*pi/2) in
-  effColored (Color 1 1 1 . y) (img .= (color (Color 1 1 1 0) . (e^.img))) n e
+  effColored (Color 1 1 1 . y) (img .= color (Color 1 1 1 0) . (e^.img)) n e
+  & runAuto %~ (>> go)
+  where
+    go = do
+      c <- (^.counter) `fmap` self
+      hook $ Left $ when (n == c) $ stateEffect .= Inactive
 
 {-
 effEnemyDead :: (Given Resource) => Vec2 -> Effect
@@ -40,9 +45,8 @@ effPlayerDead = go . effCommonAnimated 1 where
 
 effEnemyStart :: (Given Resource) => Vec2 -> Effect
 effEnemyStart = go . effCommonAnimated 2 where 
-  go :: Effect -> Effect
-  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> size *= 1.01)
-    
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> (hook $ Left $ size *= 1.01))
+
 effEnemyAttack :: Int -> Vec2 -> Effect
 effEnemyAttack i p =
   pos .~ p $
@@ -52,18 +56,35 @@ effEnemyAttack i p =
   def
 
   where
-    run :: State EffectObject ()
-    run = do
+    run :: Danmaku EffectObject ()
+    run = hook $ Left $ do
       f <- get
       when (f^.counter <= 50) $ size += 1/50
       ang += anglePlus i
       counter %= (+1)
-        
+    
     anglePlus :: Int -> Double
     anglePlus 0 = 1/300
     anglePlus 1 = -2/300
     anglePlus 2 = 3/300
     anglePlus _ = error "otherwise case in anglePlus"
+
+effPlayerBack :: Effect
+effPlayerBack = def & runAuto .~ do
+  p <- (^.player) `fmap` env
+  c <- (^.counter) `fmap` self
+  let n = p^.bombCount
+  hook $ Left $ do
+    let r = 65
+    counter %= (+1)
+    pos .= (p^.pos)
+    size .= 0.6
+    img .= \resource -> do
+      color white $ thickness 1.0 $ circleOutline r
+      forM_ [1..n] $ \i ->
+        translate (V2 r 0 `rotate2` (2*pi*fromIntegral i/fromIntegral n + fromIntegral c*5*pi/360))
+          $ color white $ bitmap
+          $ getBulletBitmap (resource^.bulletImg) BallMedium Yellow
 
 character :: Int -> Vec2 -> Stage Int
 character n p = addEffect $ effFadeIn 30 $ eff where
@@ -72,7 +93,7 @@ character n p = addEffect $ effFadeIn 30 $ eff where
         & pos .~ p
         & img .~ (\res -> bitmap $ (res^.portraits) V.! n)
         & zIndex .~ Foreground
-        & runAuto .~ (counter %= (+1))
+        & runAuto .~ (hook $ Left $ counter %= (+1))
 
 delCharacter :: Int -> Stage ()
 delCharacter c = hook $ Right $ effects %= IM.adjust (effFadeOut 30) c

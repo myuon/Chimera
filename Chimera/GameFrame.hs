@@ -13,7 +13,6 @@ import Data.Functor.Product
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
-import Chimera.Scripts.Stage1
 import Chimera.Config
 
 type GameLoop = StateT GameFrame Game
@@ -114,14 +113,14 @@ game = do
     setTitle (c^.titleName)
     clearColor $ Color 0 0 0.2 1.0
     r <- loadResource
-    s <- give r loadGameConfig
+    s <- give r $ give c $ loadGameConfig
     give r $ give c $
       evalStateT mainloop GameFrame {
         _field = def & player .~ (s^.defPlayer),
         _menu = def & items .~ menuItems (s^.defMapBitmap),
         _mapMenu = s^.defSelectMap,
         _mEngine = def,
-        _stage = stage1,
+        _stage = s^.defStage,
         _controller = Go,
         _running = menuloop,
         _quit = False,

@@ -16,6 +16,7 @@ import Chimera.Scripts.Common
 
 stage1 :: (Given Resource) => Stage ()
 stage1 = do
+  addEffect effPlayerBack
   talk $ do
     say' $ aline "メッセージのテスト"
     lufe <- character 0 $ V2 500 300

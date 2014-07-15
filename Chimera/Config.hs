@@ -1,22 +1,26 @@
-{-# LANGUAGE TemplateHaskell, FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell, FlexibleContexts, Rank2Types #-}
 module Chimera.Config where
 
 import FreeGame
 import Control.Lens
 import qualified Data.Vector as V
 import qualified Data.Map as M
+import qualified Data.Sequence as S
 import Data.Reflection
 import Data.Default
 
 import Chimera.Engine.Core
+import Chimera.Engine.Scripts
 import Chimera.Scripts.Geography
 import Chimera.Scripts.Common
+import Chimera.Scripts.Stage2
 
 data GameConfig = GameConfig {
   _defPlayer :: Player,
   _defSelectMap :: SelectMap,
   _defMapBitmap :: Bitmap,
-  _defMemory :: Memory
+  _defMemory :: Memory,
+  _defStage :: (Given Resource) => Stage ()
 }
 
 makeLenses ''GameConfig
@@ -30,11 +34,11 @@ loadConfig = return $ Config {}
   & debugMode .~ False
   & titleName .~ "Chimera"
 
-loadGameConfig :: (Given Resource) => Game GameConfig
+loadGameConfig :: (Given Resource, Given Config) => Game GameConfig
 loadGameConfig = do
   m <- readBitmap "data/img/map0.png"
-  return $ GameConfig {}
-    & defPlayer .~ def { _shotZ = fourDiamond, _shotX = silentBomb }
+  return $ GameConfig { _defStage = stage2 }
+    & defPlayer .~ def { _shotZ = fourDiamond, _shotX = silentBomb, _bombCount = 5 }
     & defSelectMap .~ SelectMap { _mapinfo = marf, _pointing2 = ("マーフの街", V2 468 371) }
     & defMapBitmap .~ m
     & defMemory .~ Memory { _cities = ["マーフの街"] }

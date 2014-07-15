@@ -79,7 +79,7 @@ talk m = do
   m
   endTalk
   yield
-  hook $ Right $ effects .= IM.empty
+--  hook $ Right $ effects .= IM.empty
   
   where
     startTalk = hook $ Left $ id .= Talk
@@ -103,11 +103,10 @@ effs :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =
            [Effect] -> m (Pattern p q) ()
 effs es = hook $ Right $ effects %= \s -> foldl (flip insertIM) s es
 
-moveSmooth :: (Autonomic c (State a) a, HasObject a, HasObject c) => 
+moveSmooth :: (Autonomic c (Danmaku a) a, HasObject a, HasObject c) => 
               Vec2 -> Int -> c -> c
 moveSmooth v time a = a & runAuto %~ (>> go) where
-  go :: (HasObject c) => State c ()
-  go = do
+  go = hook $ Left $ do
     let ang = pi / fromIntegral time
     c' <- use counter
     let c = c' - (a^.counter)
@@ -117,8 +116,7 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
 
 effColored :: (Float -> Color) -> State EffectObject () -> Int -> Effect -> Effect
 effColored f g time e = e & runAuto %~ (>> go) where
-  go :: State EffectObject ()
-  go = do
+  go = hook $ Left $ do
     c1 <- use counter
     let c = c1 - (e^.counter)
     when (0 <= c && c <= time) $ do

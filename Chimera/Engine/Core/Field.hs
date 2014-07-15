@@ -58,7 +58,8 @@ data Player = Player {
   _charaPlayer :: Chara,
   _keysPlayer :: M.Map Key Int,
   _shotZ :: (Given Resource) => State Chara (S.Seq Bullet),
-  _shotX :: (Given Resource) => State Chara (S.Seq Bullet)
+  _shotX :: (Given Resource) => State Chara (S.Seq Bullet),
+  _bombCount :: Int
   }
 
 data Field = Field {
@@ -71,7 +72,7 @@ data Field = Field {
   _danmakuTitle :: String
   }
 
-type Effect = Autonomie (State EffectObject) EffectObject
+type Effect = Autonomie (Danmaku EffectObject) EffectObject
 type Bullet = Autonomie (Danmaku BulletObject) BulletObject
 type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
 type Danmaku c = LookAt c Field
@@ -111,7 +112,7 @@ instance Default EffectObject where
     _objectEffect = def, 
     _stateEffect = Active,
     _slowRate = 3,
-    _img = error "_img is not defined",
+    _img = \_ -> return (),
     _zIndex = Background
     }
 
@@ -141,7 +142,8 @@ instance Default Player where
       def,
     _keysPlayer = M.fromList $ zip keyList [0..],
     _shotZ = error "uninitialized shotZ",
-    _shotX = error "uninitialized shotX"
+    _shotX = error "uninitialized shotX",
+    _bombCount = error "uninitialized bombCount"
     }
 
 instance Default Field where
@@ -219,8 +221,9 @@ instance GUIClass Player where
 
 instance GUIClass Effect where
   update = do
-    run <- use runAuto
-    effectObject %= execState run
+--    run <- use runAuto
+--    effectObject %= execState run
+    return ()
   
   paint = do
     b <- get
@@ -268,6 +271,7 @@ instance GUIClass Field where
     
     scanAutonomies enemy
     scanAutonomies bullets
+    scanAutonomies effects
     
     bullets %= S.filter (\b -> b^.stateBullet /= Outside) . fmap (execState update)
     enemy %= fmap (execState update) . S.filter (\e -> e^.stateChara /= Dead)
@@ -376,13 +380,16 @@ actPlayer = do
 runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
 runDanmaku = runLookAtAll
 
-scanAutonomies :: Lens' Field (S.Seq (Autonomie (Danmaku a) a)) -> State Field ()
+scanAutonomies :: (Traversable f) => Lens' Field (f (Autonomie (Danmaku a) a)) -> State Field ()
 scanAutonomies member = do
   f <- use id
-  let pairs = fmap (\c -> runDanmaku (c^.auto) f (c^.runAuto)) $ f^.member
-  member .= (fmap (\(b,s) -> b & auto %~ execState s) $ 
-             S.zip (f^.member) $ fmap (\(Pair a _) -> a) pairs)
-  modify $ execState $ T.mapM (\(Pair _ b) -> b) pairs
+  let pairs = fmap (runEach f) $ f^.member
+  member .= (fmap (\(a, Pair s _) -> a & auto %~ execState s) pairs)
+  modify $ execState $ T.mapM (\(_, Pair _ t) -> t) pairs
+
+  where
+    runEach :: Field -> Autonomie (Danmaku a) a -> (Autonomie (Danmaku a) a, Product (State a) (State Field) ())
+    runEach f c = (,) c $ runDanmaku (c^.auto) f (c^.runAuto)
 
 collideObj :: (Given Resource) => State Field ()
 collideObj = do
@@ -428,22 +435,24 @@ addBullet = do
     s <- use (player.shotZ)
     p <- use (player.charaPlayer)
     bullets ><= evalState s p
-  
-  when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0) $ do
+
+  n <- use (player.bombCount)
+  when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0 && n > 0) $ do
     s <- use (player.shotX)
     p <- use (player.charaPlayer)
     bullets ><= evalState s p
+    zoom player $ bombCount -= 1
 
 effPlayerDead :: (Given Resource) => Vec2 -> Effect
 effPlayerDead = go . effCommonAnimated 1 where
   go :: Effect -> Effect
-  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> (hook $ Left $ size *= 1.01))
 
 effEnemyDead :: (Given Resource) => Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
 effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
-effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
+effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ (hook $ Left $ run) where
   run = do
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)
