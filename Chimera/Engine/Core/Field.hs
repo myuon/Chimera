@@ -1,9 +1,11 @@
 {-# LANGUAGE TemplateHaskell, Rank2Types, FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Chimera.Engine.Core.Field where
 
 import FreeGame
 import Control.Lens
+import Control.Arrow
 import Control.Monad.State.Strict
 import qualified Data.Sequence as S
 import qualified Data.Vector as V
@@ -19,39 +21,32 @@ import Data.Functor.Product
 import Chimera.Engine.Core.Util
 import Chimera.Engine.Core.Types
 
-data StateEffect = Active | Inactive deriving (Eq, Enum, Show)
-data ZIndex = Background | OnObject | Foreground deriving (Eq, Show)
-data StateChara = Alive | Attack | Damaged | Dead deriving (Eq, Enum, Show)
-data StateBullet = PlayerB | EnemyB | Outside deriving (Eq, Ord, Enum, Show)
+data GroupFlag = GPlayer | GEnemy | None | All deriving (Eq, Show)
+data ZIndex = Invisible | Background | OnObject | Foreground deriving (Eq, Show)
+data StatePiece = Standby | Alive | Attack | Damaged | Dead deriving (Eq, Show)
 data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
              Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
 data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
-  deriving (Eq, Ord, Enum, Show)
+              deriving (Eq, Ord, Enum, Show)
+
+data Piece = Piece {
+  _objectPiece :: Object,
+  _group :: GroupFlag,
+  _drawing :: Game (),
+  _statePiece :: StatePiece,
+  _scaleRate :: Double
+  }
+
+data EffectPiece = EffectPiece {
+  _pieceEffect :: Piece,
+  _zIndex :: ZIndex,
+  _slowRate :: Int
+  }
 
 data Chara = Chara {
-  _objectChara :: Object,
-  _stateChara :: StateChara,
+  _pieceChara :: Piece,
   _hp :: Int,
   _effectIndexes :: S.Seq Int
-  }
-
-data EffectObject = EffectObject {
-  _objectEffect :: Object,
-  _stateEffect :: StateEffect,
-  _slowRate :: Int,
-  _img :: Resource -> Game (),
-  _zIndex :: ZIndex
-  }
-
-data BulletObject = BulletObject {
-  _objectBullet :: Object,
-  _stateBullet :: StateBullet,
-  _kind :: BKind,
-  _bcolor :: BColor
-  } deriving (Eq, Show)
-
-data EnemyObject = EnemyObject {
-  _charaEnemy :: Chara
   }
 
 data Player = Player {
@@ -64,7 +59,7 @@ data Player = Player {
 
 data Field = Field {
   _player :: Player,
-  _enemy :: S.Seq Enemy,
+  _enemies :: S.Seq Enemy,
   _bullets :: S.Seq Bullet,
   _effects :: IM.IntMap Effect,
   _counterF :: Int,
@@ -72,65 +67,43 @@ data Field = Field {
   _danmakuTitle :: String
   }
 
-type Effect = Autonomie (Danmaku EffectObject) EffectObject
-type Bullet = Autonomie (Danmaku BulletObject) BulletObject
-type Enemy = Autonomie (Danmaku EnemyObject) EnemyObject
 type Danmaku c = LookAt c Field
+type Component a = Autonomie (Danmaku a) a
+type Bullet = Component Piece
+type Enemy = Component Chara
+type Effect = Component EffectPiece
 
 makeClassy ''Chara
-makeClassy ''EffectObject
-makeClassy ''BulletObject
-makeClassy ''EnemyObject
+makeClassy ''Piece
+makeClassy ''EffectPiece
 makeLenses ''Player
 makeLenses ''Field
 
-instance HasObject Chara where object = objectChara
-instance HasObject EffectObject where object = objectEffect
-instance HasEffectObject Effect where effectObject = auto
-instance HasObject Effect where object = auto . objectEffect
-instance HasObject BulletObject where object = objectBullet
-instance HasChara EnemyObject where chara = charaEnemy
-instance HasObject EnemyObject where object = chara . object
+instance HasObject Piece where object = objectPiece
+instance HasPiece Chara where piece = pieceChara
+instance HasObject Chara where object = piece . object
+instance HasPiece EffectPiece where piece = pieceEffect
+instance HasObject EffectPiece where object = piece . object
 instance HasChara Player where chara = charaPlayer
-instance HasObject Player where object = chara . object
+instance HasPiece Player where piece = charaPlayer . piece
+instance HasObject Player where object = charaPlayer . object
 instance HasObject Bullet where object = auto . object
-instance HasBulletObject Bullet where bulletObject = auto
+instance HasPiece Bullet where piece = auto
 instance HasObject Enemy where object = auto . object
-instance HasChara Enemy where chara = auto . chara
-instance HasEnemyObject Enemy where enemyObject = auto
+instance HasPiece Enemy where piece = auto . piece
+instance HasChara Enemy where chara = auto
+instance HasObject Effect where object = auto . object
+instance HasPiece Effect where piece = auto . piece
+instance HasEffectPiece Effect where effectPiece = auto
+
+instance Default Piece where
+  def = Piece def None (return ()) Alive 1.0
+
+instance Default EffectPiece where
+  def = EffectPiece def Background 3
 
 instance Default Chara where
-  def = Chara { 
-    _objectChara = def,
-    _stateChara = Alive,
-    _hp = 0,
-    _effectIndexes = S.empty
-    }
-
-instance Default EffectObject where
-  def = EffectObject { 
-    _objectEffect = def, 
-    _stateEffect = Active,
-    _slowRate = 3,
-    _img = \_ -> return (),
-    _zIndex = Background
-    }
-
-instance Default BulletObject where
-  def = BulletObject { 
-    _objectBullet = (size .~ V2 3 3 $ def),
-    _stateBullet = EnemyB,
-    _kind = BallMedium,
-    _bcolor = Red
-    }
-
-instance Default EnemyObject where
-  def = EnemyObject {
-    _charaEnemy =
-      spXY .~ V2 0 0 $
-      size .~ V2 15 15 $
-      def
-    }
+  def = Chara def 10 S.empty
 
 instance Default Player where
   def = Player {
@@ -147,52 +120,7 @@ instance Default Player where
     }
 
 instance Default Field where
-  def = Field {
-    _player = def,
-    _enemy = S.empty,
-    _bullets = S.empty,
-    _effects = IM.empty,
-    _counterF = 0,
-    _isDebug = False,
-    _danmakuTitle = ""
-    }
-
-collide :: (HasObject c, HasObject b) => c -> b -> Bool
-collide oc ob = let oc' = extend oc; ob' = extend ob; in
-  detect ob' oc' || detect oc' ob'
-  where
-    extend :: (HasObject c) => c -> c
-    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.ang) + (x^.spXY)
---    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
-
-    detect :: (HasObject c, HasObject c') => c -> c' -> Bool
-    detect a b = 
-      let V2 w' h' = a^.size
-          r = \v -> rotate2 v $ a^.ang in
-      or [(a^.pos) `isIn` b,
-          (a^.pos + r (V2   w'    h' )) `isIn` b,
-          (a^.pos + r (V2 (-w')   h' )) `isIn` b,
-          (a^.pos + r (V2   w'  (-h'))) `isIn` b,
-          (a^.pos + r (V2 (-w') (-h'))) `isIn` b]
-    
-    isIn :: (HasObject c) => Vec2 -> c -> Bool
-    isIn p box = isInCentoredBox (p-box^.pos) where
-      isInCentoredBox :: Vec2 -> Bool
-      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
-        abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
-
-areaBullet :: BKind -> Vec2
-areaBullet BallLarge = V2 15 15
-areaBullet BallMedium = V2 7 7
-areaBullet BallSmall = V2 4 4
-areaBullet Oval = V2 7 3
-areaBullet Diamond = V2 5 3
-areaBullet BallFrame = V2 5 5
-areaBullet Needle = V2 30 1
-areaBullet BallTiny = V2 2 2
-
-makeBullet :: (HasObject c, HasBulletObject c) => c -> c
-makeBullet b = b & size .~ areaBullet (b^.kind)
+  def = Field def S.empty S.empty IM.empty 0 False ""
 
 instance GUIClass Player where
   update = do
@@ -211,92 +139,87 @@ instance GUIClass Player where
         addTup (k M.! KeyUp    > 0) (0,-1) $
         addTup (k M.! KeyDown  > 0) (0,1) $
         addTup (k M.! KeyRight > 0) (1,0) $
-        addTup (k M.! KeyLeft  > 0) (-1,0) $
-        0
+        addTup (k M.! KeyLeft  > 0) (-1,0) $ 0
 
   paint = do
     p <- get
     let resource = given :: Resource
     draw $ translate (p^.pos) $ bitmap $ (resource^.charaImg) V.! 0
 
-instance GUIClass Effect where
-  update = do
---    run <- use runAuto
---    effectObject %= execState run
-    return ()
-  
-  paint = do
-    b <- get
-    let res = given :: Resource
-    lift $ translate (b^.pos) $ rotateR (b^.ang) $ scale (b^.size) $ b^.img $ res
-
-instance GUIClass Bullet where
+instance (HasPiece (Component a), HasObject (Component a)) =>
+         GUIClass (Component a) where
   update = do
     r <- use speed
     t <- use ang
     pos += rotate2 (V2 r 0) t
-    p <- use pos
-    let config = given :: Config
-    unless (p `isInside` (config^.validArea)) $ stateBullet .= Outside
 
-  paint = do
-    let res = given :: Resource
-    V2 x y <- use size
-    b <- get
-    case x /= y of
-      True -> draw $ translate (b^.pos) $ 
-              rotateR (b^.ang + pi/2) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
-      False -> draw $ translate (b^.pos) $ bitmap $ getBulletBitmap (res^.bulletImg) (b^.kind) (b^.bcolor)
-
-instance GUIClass Enemy where
-  update = do
     sp <- use spXY
-    pos %= (+sp)
+    pos += sp
+
     counter %= (+1)
-    h <- use hp
-    when (h <= 0) $ stateChara .= Dead
-  
+
+    let config = given :: Config
+    use pos >>= \p -> unless (p `isInside` (config^.validArea)) $ do
+      use statePiece >>= \s -> when (s /= Standby) $ do
+        statePiece .= Dead
+
   paint = do
-    let res = given :: Resource
-    c <- get
-    draw $ translate (c^.pos) $ bitmap $ (res^.charaImg) V.! 1
+    b <- get
+    V2 x y <- use size
+    case x /= y of
+      True -> lift $ translate (b^.pos) $
+        scale (V2 (b^.scaleRate) (b^.scaleRate)) $ rotateR (b^.ang + pi/2) $ b^.drawing
+      False -> lift $ translate (b^.pos) $
+        scale (V2 (b^.scaleRate) (b^.scaleRate)) $ b^.drawing
 
 instance GUIClass Field where
   update = do
     counterF %= (+1)
     danmakuTitle .= ""
-    
+
     collideObj
     deadEnemyEffects
+    damagedEffects
     
-    scanAutonomies enemy
+    scanAutonomies enemies
     scanAutonomies bullets
     scanAutonomies effects
-    
-    bullets %= S.filter (\b -> b^.stateBullet /= Outside) . fmap (execState update)
-    enemy %= fmap (execState update) . S.filter (\e -> e^.stateChara /= Dead)
+
+    enemies %= S.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
+    bullets %= S.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
+    effects %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
     player %= execState update
-    effects %= IM.filter (\e -> e^.stateEffect /= Inactive) . fmap (execState update)
     
     where
-      deadEnemies = S.filter ((== Dead) . (^.stateChara))
-      
       deadEnemyEffects = do
-        ds <- deadEnemies `fmap` use enemy
+        ds <- S.filter (\p -> p^.statePiece == Dead) `fmap` use enemies
         F.forM_ ds $ \e -> do
           effects %= insertIM (effEnemyDead $ e^.pos)
           F.forM_ (e^.effectIndexes) $ \i ->
-            effects %= IM.adjust (execState $ stateEffect .= Inactive) i
-      
+            effects %= IM.adjust (execState $ statePiece .= Dead) i
+
+      damagedEffects = do
+        {-
+        ds <- S.filter (\p -> p^.statePiece == Damaged) `fmap` use enemies
+        F.forM_ ds $ \e -> do
+          effects %= insertIM (effPlayerDead $ e^.pos)
+        enemies %= fmap (statePiece .~ Attack)
+        -}
+
+        p <- use player
+        when (p^.statePiece == Damaged) $
+          effects %= insertIM (effPlayerDead $ p^.pos)
+        player %= (statePiece .~ Attack)
+
   paint = do
     drawEffs Background
     drawObj
     drawEffs OnObject
-    use isDebug >>= \m -> when m $ debugging
     translate (V2 320 240) . bitmap $ resource ^. board
     drawMessages
     drawEffs Foreground
     use danmakuTitle >>= \t -> when (t /= "") drawTitle
+    use isDebug >>= \m -> when m $ debugging
     
     where
       resource = given :: Resource
@@ -304,7 +227,7 @@ instance GUIClass Field where
       drawObj = do
         _ <- lift . execStateT paint =<< use player
         F.mapM_ (lift . execStateT paint) =<< use bullets
-        F.mapM_ (lift . execStateT paint) =<< use enemy
+        F.mapM_ (lift . execStateT paint) =<< use enemies
       
       drawEffs z = do
         F.mapM_ (lift . execStateT paint) . IM.filter (\r -> r^.zIndex == z)
@@ -316,7 +239,7 @@ instance GUIClass Field where
         _ <- (\p -> color yellow . polygon $ 
                     boxVertex (p^.pos) (p^.size)) =<< use player
         F.mapM_ (\e -> color green . polygon $ 
-                       boxVertex (e^.pos) (e^.size)) =<< use enemy
+                       boxVertex (e^.pos) (e^.size)) =<< use enemies
       
       drawMessages = do
         let ls = resource ^. labels
@@ -337,7 +260,7 @@ instance GUIClass Field where
         drawScore 170 . S.length =<< use bullets
 
         lift $ translate (V2 430 190) $ ls M.! "enemies"
-        drawScore 190 . S.length =<< use enemy
+        drawScore 190 . S.length =<< use enemies
 
         lift $ translate (V2 430 210) $ ls M.! "effects"
         drawScore 210 . IM.size =<< use effects
@@ -391,41 +314,76 @@ scanAutonomies member = do
     runEach :: Field -> Autonomie (Danmaku a) a -> (Autonomie (Danmaku a) a, Product (State a) (State Field) ())
     runEach f c = (,) c $ runDanmaku (c^.auto) f (c^.runAuto)
 
+collide :: (HasObject c, HasObject b) => c -> b -> Bool
+collide oc ob = let oc' = extend oc; ob' = extend ob; in
+  detect ob' oc' || detect oc' ob'
+  where
+    extend :: (HasObject c) => c -> c
+    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.ang) + (x^.spXY)
+--    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
+
+    detect :: (HasObject c, HasObject c') => c -> c' -> Bool
+    detect a b = 
+      let V2 w' h' = a^.size
+          r = \v -> rotate2 v $ a^.ang in
+      or [(a^.pos) `isIn` b,
+          (a^.pos + r (V2   w'    h' )) `isIn` b,
+          (a^.pos + r (V2 (-w')   h' )) `isIn` b,
+          (a^.pos + r (V2   w'  (-h'))) `isIn` b,
+          (a^.pos + r (V2 (-w') (-h'))) `isIn` b]
+    
+    isIn :: (HasObject c) => Vec2 -> c -> Bool
+    isIn p box = isInCentoredBox (p-box^.pos) where
+      isInCentoredBox :: Vec2 -> Bool
+      isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
+        abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
+
+areaBullet :: BKind -> Vec2
+areaBullet BallLarge = V2 15 15
+areaBullet BallMedium = V2 7 7
+areaBullet BallSmall = V2 4 4
+areaBullet Oval = V2 7 3
+areaBullet Diamond = V2 5 3
+areaBullet BallFrame = V2 5 5
+areaBullet Needle = V2 30 1
+areaBullet BallTiny = V2 2 2
+
+makeBullet :: (Given Resource, HasPiece c, HasObject c) => BKind -> BColor -> c -> c
+makeBullet bk bc b = let resource = given :: Resource in b
+  & size .~ areaBullet bk & group .~ GEnemy
+  & drawing .~ (bitmap $ (resource^.bulletImg) V.! (fromEnum bk) V.! (fromEnum bc))
+
 collideObj :: (Given Resource) => State Field ()
 collideObj = do
+  es <- use enemies
+  bs <- use bullets
+  let (es',bs') = collideSeq GPlayer es bs
+  enemies .= es'
+
   p <- use player
-  let run' = run createEffect
-  
-  (n, bs') <- runPair PlayerB p `fmap` use bullets
-  player %= (hp -~ n)
-  when (n>0) $ effects %= (insertIM $ effPlayerDead (p^.pos))
-  
-  (es', bs'', _) <- (\es -> return $ run' EnemyB es bs') =<< use enemy
-  enemy .= es'
+  let (p',bs'') = collideSeq GEnemy (S.singleton p) bs'
+  player .= S.index p' 0
   bullets .= bs''
-  -- effects %= (effEnemyDamaged ...)
 
   where
-    runPair :: (HasChara c, HasObject c) => 
-               StateBullet -> c -> S.Seq Bullet -> (Int, S.Seq Bullet)
-    runPair s c bs = 
-      let bs' = S.filter (\b -> s /= b^.stateBullet && collide c b) bs in
-      (S.length bs', S.filter (\b -> (Nothing ==) $ b `S.elemIndexL` bs') bs)
-    
-    run :: (HasChara c, HasObject c) => 
-           (StateBullet -> c -> Effect) -> StateBullet -> S.Seq c -> S.Seq Bullet -> 
-           (S.Seq c, S.Seq Bullet, S.Seq Effect)
-    run eff s cseq bss = iter (S.viewl cseq) (S.empty, bss, S.empty) where
-      iter S.EmptyL acc = acc
-      iter (h S.:< rest) (cs, bs, es) = iter (S.viewl rest) (cs', bs', es') where
-        (n, bs') = runPair s h bs
-        cs' = (h & hp -~ n) S.<| cs
-        es' = if n>0 then es else es S.|> eff s h
-    
-    createEffect :: (HasChara c, HasObject c, Given Resource) => StateBullet -> c -> Effect
-    createEffect PlayerB e = effPlayerDead (e^.pos)
-    createEffect EnemyB e = effPlayerDead (e^.pos)
-    createEffect _ _ = error "otherwise case in createEffect"
+    collideTo :: (HasPiece e, HasObject e) =>
+                 GroupFlag -> e -> S.Seq Bullet -> (Int, S.Seq Bullet)
+    collideTo flag e = first S.length . S.partition (\b -> collide e b && (b^.group) == flag)
+
+    damage :: (HasPiece c, HasChara c) => (StatePiece -> StatePiece) -> c -> Int -> c
+    damage s e n
+      | n == 0 = e
+      | otherwise = let e' = e & hp -~ n in
+      case e'^.hp > 0 of
+        True -> e' & statePiece %~ s
+        False -> e' & statePiece .~ Dead
+
+    collideSeq :: (HasPiece e, HasChara e, HasObject e) => 
+                  GroupFlag -> S.Seq e -> S.Seq Bullet -> (S.Seq e, S.Seq Bullet)
+    collideSeq flag es bs = F.foldl k (S.empty, bs) es where
+      k (es', bs') e = let (dmg, bsc) = collideTo flag e bs' in case flag of
+        GPlayer -> (es' S.|> damage id e dmg, bsc)
+        _ -> (es' S.|> damage (const Damaged) e dmg, bsc)
 
 addBullet :: (Given Resource) => State Field ()
 addBullet = do
@@ -452,14 +410,10 @@ effEnemyDead :: (Given Resource) => Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
 effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
-effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ (hook $ Left $ run) where
-  run = do
+effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
+  run = hook $ Left $ do
+    let resource = given :: Resource
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)
-    img .= \r -> bitmap $ (r^.effectImg) V.! k V.! i
-    counter %= (+1)
-    let resource = given :: Resource
-    when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive
-
-getBulletBitmap :: V.Vector (V.Vector Bitmap) -> BKind -> BColor -> Bitmap
-getBulletBitmap imgs bk bc = imgs V.! (fromEnum bk) V.! (fromEnum bc)
+    drawing .= (bitmap $ (resource^.effectImg) V.! k V.! i)
+    when (i == V.length ((resource^.effectImg) V.! k)) $ statePiece .= Dead

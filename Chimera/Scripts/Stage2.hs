@@ -10,6 +10,7 @@ import Control.Arrow
 import Data.Default (def)
 import Data.Reflection (Given, given)
 import qualified Data.Map as M
+import Debug.Trace as Trace
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
@@ -38,7 +39,8 @@ stage2 = do
 
   keeper $ initEnemy (V2 224 (-40)) 100 & runAuto .~ gameOfLife
 
-gameOfLife :: (Given Resource, Given Config) => Danmaku EnemyObject ()
+gameOfLife :: (Given Resource, Given Config, HasChara c, HasPiece c, HasObject c) =>
+              Danmaku c ()
 gameOfLife = do
   setName "Conway's Game of Life"
   
@@ -49,12 +51,12 @@ gameOfLife = do
   when (s^.counter `mod` 100 == 0 && s^.counter >= 300) $ do
     let b = (iterate step $ lineBoard w' h') !! ((s^.counter - 300) `div` 100)
     shots $ flip fmap (M.toList $ M.filter id b) $ \((x,y),_) ->
-      def & pos .~ (fromIntegral $ n`div`2) + V2 (fromIntegral $ x*n) (fromIntegral $ y*n) & speed .~ 0
-          & kind .~ BallTiny & bcolor .~ Green
-          & runAuto .~ do
-            hook $ Left $ do
-              counter %= (+1)
-              use counter >>= \c -> when (c == 50) $ stateBullet .= Outside
+      makeBullet BallTiny Green def
+        & pos .~ (fromIntegral $ n`div`2) + V2 (fromIntegral $ x*n) (fromIntegral $ y*n)
+        & speed .~ 0
+        & runAuto .~ do 
+          hook $ Left $ do
+            use counter >>= \c -> when (c == 50) $ statePiece .= Dead
 
   where
     n = 15
@@ -77,13 +79,11 @@ gameOfLife = do
       def & zIndex .~ Background & runAuto .~ do
         c <- (^.counter) `fmap` self
         hook $ Left $ do
-          counter %= (+1)
-          img .= \resource -> do
-            case ((truncate h) `div` intv <= c) of
-              True -> lx w >> ly h
-              False -> do
-                lx $ fromIntegral $ c*intv
-                ly $ fromIntegral $ c*intv
+          drawing .= case ((truncate h) `div` intv <= c) of
+            True -> lx w >> ly h
+            False -> do
+              lx $ fromIntegral $ c*intv
+              ly $ fromIntegral $ c*intv
 
     lineBoard :: Int -> Int -> Board Bool
     lineBoard w h = M.fromList [((x,y),f (x,y))|x<-[0..w'-1], y<-[0..h'+100]] where

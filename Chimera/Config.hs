@@ -13,6 +13,7 @@ import Chimera.Engine.Core
 import Chimera.Engine.Scripts
 import Chimera.Scripts.Geography
 import Chimera.Scripts.Common
+import Chimera.Scripts.Stage1
 import Chimera.Scripts.Stage2
 
 data GameConfig = GameConfig {
@@ -20,7 +21,7 @@ data GameConfig = GameConfig {
   _defSelectMap :: SelectMap,
   _defMapBitmap :: Bitmap,
   _defMemory :: Memory,
-  _defStage :: (Given Resource) => Stage ()
+  _defStage :: Stage ()
 }
 
 makeLenses ''GameConfig
@@ -37,7 +38,7 @@ loadConfig = return $ Config {}
 loadGameConfig :: (Given Resource, Given Config) => Game GameConfig
 loadGameConfig = do
   m <- readBitmap "data/img/map0.png"
-  return $ GameConfig { _defStage = stage2 }
+  return $ GameConfig { _defStage = stage1 }
     & defPlayer .~ def { _shotZ = fourDiamond, _shotX = silentBomb, _bombCount = 5 }
     & defSelectMap .~ SelectMap { _mapinfo = marf, _pointing2 = ("マーフの街", V2 468 371) }
     & defMapBitmap .~ m
@@ -107,4 +108,3 @@ clipBulletBitmap bk bc
 
     clip :: Int -> Int -> Int -> Int -> Bitmap -> Bitmap
     clip a b c d bmp = cropBitmap bmp (c,d) (a,b)
-

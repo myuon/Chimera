@@ -31,7 +31,7 @@ runController (Wait n) = case n == 0 of
   True -> return Go
   False -> return $ Wait (n-1)
 runController Stop = do
-  es <- (S.length . (^.enemy)) `fmap` ask
+  es <- (S.length . (^.enemies)) `fmap` ask
   case es == 0 of
     True -> return Go
     False -> return Stop
@@ -49,7 +49,7 @@ isStageRunning (Wait _) = False
 isStageRunning _ = True
 
 appearEnemy :: Enemy -> Stage ()
-appearEnemy e = hook $ Right $ enemy %= (S.|> e)
+appearEnemy e = hook $ Right $ enemies %= (S.|> e)
 
 wait :: Int -> Stage ()
 wait n = do
@@ -114,27 +114,15 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
       let t = ang * (fromIntegral $ c)
       pos += ((ang * 0.5 * sin t) *^ v)
 
-effColored :: (Float -> Color) -> State EffectObject () -> Int -> Effect -> Effect
+effColored :: (Float -> Color) -> State EffectPiece () -> Int -> Effect -> Effect
 effColored f g time e = e & runAuto %~ (>> go) where
   go = hook $ Left $ do
     c1 <- use counter
     let c = c1 - (e^.counter)
     when (0 <= c && c <= time) $ do
       let x = fromIntegral c/fromIntegral time
-      img .= (color (f x) . (e^.img))
+      drawing .= (color (f x) $ e^.drawing)
     when (c == time) $ g
-
-{-
-effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
-effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
-  run = do
-    f <- get
-    let i = (f^.counter) `div` (f^.slowRate)
-    img .= \r -> bitmap $ (r^.effectImg) V.! k V.! i
-    counter %= (+1)
-    let resource = given :: Resource
-    when (i == V.length ((resource^.effectImg) V.! k)) $ stateEffect .= Inactive
--}
 
 say' :: Expr -> Stage ()
 say' m = speak $ m <> clickend

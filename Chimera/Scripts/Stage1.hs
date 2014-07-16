@@ -56,7 +56,7 @@ stage1 = do
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss2
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss1
 
-zako :: (Given Resource) => Int -> Danmaku EnemyObject ()
+zako :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Int -> Danmaku c ()
 zako n
   | n >= 20 = zakoCommon 0 (motionCommon 100 (Curve (acc $ n `mod` 10))) 50 Needle Purple
   | n >= 10 = zakoCommon 0 (motionCommon 100 Straight) 50 BallMedium (toEnum $ n `mod` 10)
@@ -67,7 +67,7 @@ zako n
     acc 1 = V2 0.05 0.005
     acc _ = error "otherwise case in acc"
 
-boss1 :: (Given Resource) => Danmaku EnemyObject ()
+boss1 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss1 = do
   setName "回転弾"
   
@@ -81,54 +81,33 @@ boss1 = do
       effEnemyAttack 2 (e^.pos)]
   
   let def' = def & pos .~ e^.pos & ang .~ (fromIntegral $ e^.counter)/30
-  when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.stateChara == Attack) $ do
+  when ((e^.counter) >= 200 && (e^.counter) `mod` 15 == 0 && e^.statePiece == Attack) $ do
     shots $ (flip map) [1..4] $ \i -> 
-      makeBullet $
-      speed .~ 3.15 $
-      ang +~ 2*pi*i/4 $
-      kind .~ Oval $
-      bcolor .~ Red $
-      runAuto %~ (\f -> go 190 300 >> f) $
-      def'
+      makeBullet Oval Red def'
+        & speed .~ 3.15 & ang +~ 2*pi*i/4
+        & runAuto %~ (go 190 300 >>)
     shots $ (flip map) [1..4] $ \i ->
-      makeBullet $
-      speed .~ 3 $
-      ang +~ 2*pi*i/4 $
-      kind .~ Oval $
-      bcolor .~ Yellow $
-      runAuto %~ (\f -> go 135 290 >> f) $
-      def'
+      makeBullet Oval Yellow def'
+        & speed .~ 3 & ang +~ 2*pi*i/4
+        & runAuto %~ (go 135 290 >>)
     shots $ (flip map) [1..4] $ \i ->
-      makeBullet $
-      speed .~ 2.5 $
-      ang +~ 2*pi*i/4 $
-      kind .~ Oval $
-      bcolor .~ Green $
-      runAuto %~ (\f -> go 120 280 >> f) $
-      def'
+      makeBullet Oval Green def'
+        & speed .~ 2.5 & ang +~ 2*pi*i/4
+        & runAuto %~ (go 120 280 >>)
     shots $ (flip map) [1..4] $ \i ->
-      makeBullet $
-      speed .~ 2.2 $
-      ang +~ 2*pi*i/4 $
-      kind .~ Oval $
-      bcolor .~ Blue $
-      runAuto %~ (\f -> go 100 270 >> f) $
-      def'
+      makeBullet Oval Blue def'
+        & speed .~ 2.2 & ang +~ 2*pi*i/4
+        & runAuto %~ (go 100 270 >>)
 
   where
-    go :: Double -> Double -> Danmaku BulletObject ()
     go t1 t2 = hook $ Left $ do
-      counter %= (+1)
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
         ang %= (+ pi/t1)
         speed %= (subtract (7.0/t2))
-      when (cnt == 170) $ do
-        kind .= BallTiny
-        bcolor .= Purple
-        modify makeBullet
+      when (cnt == 170) $ id %= makeBullet BallTiny Purple
 
-boss2 :: (Given Resource) => Danmaku EnemyObject ()
+boss2 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss2 = do
   setName "分裂弾"
   
@@ -142,28 +121,17 @@ boss2 = do
       effEnemyAttack 1 (e^.pos),
       effEnemyAttack 2 (e^.pos)]
   
-  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $
+  when (e^.counter `mod` 50 == 0 && e^.statePiece == Attack) $
     shots $ (flip map) [0..5] $ \i ->
-      makeBullet $
-      pos .~ e^.pos $
-      speed .~ 2 $
-      ang .~ ang' + fromIntegral i*2*pi/5 $
-      bcolor .~ (toEnum $ i*2 `mod` 8) $
-      runAuto %~ (\f -> go i >> f) $
-      def
-  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $
-    shots $ return $
-      makeBullet $
-      pos .~ e^.pos $
-      speed .~ 1.5 $
-      ang .~ ang' $
-      kind .~ BallLarge $
-      bcolor .~ Purple $
-      def
+      makeBullet BallMedium (toEnum $ i*2 `mod` 8) def
+        & pos .~ e^.pos & speed .~ 2
+        & ang .~ ang' + fromIntegral i*2*pi/5 & runAuto %~ (go >>)
+  when (e^.counter `mod` 100 == 0 && e^.statePiece == Attack) $
+    shots $ return $ makeBullet BallLarge Purple def
+      & pos .~ e^.pos & speed .~ 1.5 & ang .~ ang'
   
   where
-    go :: Int -> Danmaku BulletObject ()
-    go _ = do
+    go = do
       b <- self
       let t = pi/3
       let time = 50
@@ -171,14 +139,13 @@ boss2 = do
         shots $ return $ def & auto .~ b & ang +~ t
       
       hook $ Left $ do
-        counter %= (+1)
         cnt <- use counter
         when (cnt < 200 && cnt `mod` time == 0) $ do
           speed += 1.5
           ang -= t
         when (cnt < 200) $ speed -= (fromIntegral $ time - cnt `mod` time)/1000
 
-boss3 :: (Given Resource) => Danmaku EnemyObject ()
+boss3 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss3 = do
   setName "爆発弾"
 
@@ -192,16 +159,14 @@ boss3 = do
     enemyEffect $ effEnemyAttack 2 (e^.pos)
   
   let n = 8 :: Int
-  let def' = def & pos .~ e^.pos & speed .~ 3 & kind .~ Needle
-  when (e^.counter `mod` 100 == 0 && e^.stateChara == Attack) $ do
+  when (e^.counter `mod` 100 == 0 && e^.statePiece == Attack) $ do
     shots $ (flip map) [0..n] $ \i ->
-      makeBullet $ def'
-      & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
-      & bcolor .~ (toEnum $ i*2 `mod` 2)
-      & runAuto %~ (\f -> go >> f)
+      makeBullet Needle (toEnum $ i*2 `mod` 2) def
+        & pos .~ e^.pos & speed .~ 3
+        & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
+        & runAuto %~ (go >>)
   
   where
-    go :: Danmaku BulletObject ()
     go = do
       hook $ Left $ do
         use counter >>= \c -> when (c <= 150) $ speed -= 0.01
@@ -211,12 +176,12 @@ boss3 = do
       let n = 8 :: Int
       when (b^.counter == 150) $
         shots $ flip map [0..n] $ \i ->
-          makeBullet $ def
-          & auto .~ b & kind .~ BallLarge & speed .~ 1.5
-          & bcolor .~ Blue
-          & ang .~ fromIntegral i*2*pi/fromIntegral n
+          makeBullet BallLarge Blue def
+            & auto .~ b & speed .~ 1.5
+            & ang .~ fromIntegral i*2*pi/fromIntegral n
 
-boss4 :: (Given Resource) => Danmaku EnemyObject ()
+boss4 :: (Given Resource, HasPiece c, HasObject c, HasChara c) =>
+         Danmaku c ()
 boss4 = do
   setName "ホーミング弾"
 
@@ -230,16 +195,14 @@ boss4 = do
     enemyEffect $ effEnemyAttack 2 (e^.pos)
   
   let n = 3 :: Int
-  let def' = def & pos .~ e^.pos & speed .~ 5 & kind .~ Oval
-  when (e^.counter `mod` 50 == 0 && e^.stateChara == Attack) $ do
+  when (e^.counter `mod` 50 == 0 && e^.statePiece == Attack) $ do
     shots $ (flip map) [0..n] $ \i ->
-      makeBullet $ def'
-      & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
-      & bcolor .~ (toEnum $ i*2 `mod` 2)
-      & runAuto %~ (\f -> go >> f)
+      makeBullet Oval (toEnum $ i*2 `mod` 2) def
+        & pos .~ e^.pos & speed .~ 5
+        & ang .~ ang' + fromIntegral i*2*pi/fromIntegral n
+        & runAuto %~ (go >>)
   
   where
-    go :: Danmaku BulletObject ()
     go = do
       ang' <- anglePlayer
       hook $ Left $ do

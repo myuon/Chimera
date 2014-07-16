@@ -8,60 +8,46 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
 import qualified Data.Sequence as S
-import Data.Reflection (Given)
+import Data.Reflection (Given, given)
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
 
 data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 
-enemyEffect :: Effect -> Danmaku EnemyObject ()
+enemyEffect :: (HasPiece c, HasChara c) => Effect -> Danmaku c ()
 enemyEffect e = do
   n <- addEffect e
   hook $ Left $ effectIndexes %= (S.|> n)
 
 effFadeIn :: Int -> Effect -> Effect
 effFadeIn n e = let y x = sin $ x*(pi/2) in
-  effColored (Color 1 1 1 . y) (img .= (e^.img)) n e
+  effColored (Color 1 1 1 . y) (drawing .= (e^.drawing)) n e
 
 effFadeOut :: Int -> Effect -> Effect
 effFadeOut n e = let y x = cos $ (x*pi/2) in
-  effColored (Color 1 1 1 . y) (img .= color (Color 1 1 1 0) . (e^.img)) n e
+  effColored (Color 1 1 1 . y) (drawing .= (color (Color 1 1 1 0) $ e^.drawing)) n e
   & runAuto %~ (>> go)
   where
     go = do
       c <- (^.counter) `fmap` self
-      hook $ Left $ when (n == c) $ stateEffect .= Inactive
-
-{-
-effEnemyDead :: (Given Resource) => Vec2 -> Effect
-effEnemyDead = effCommonAnimated 0
-
-effPlayerDead :: (Given Resource) => Vec2 -> Effect
-effPlayerDead = go . effCommonAnimated 1 where
-  go :: Effect -> Effect
-  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> size *= 1.01)
--}
+      hook $ Left $ when (n == c) $ statePiece .= Dead
 
 effEnemyStart :: (Given Resource) => Vec2 -> Effect
 effEnemyStart = go . effCommonAnimated 2 where 
   go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> (hook $ Left $ size *= 1.01))
 
-effEnemyAttack :: Int -> Vec2 -> Effect
-effEnemyAttack i p =
-  pos .~ p $
-  img .~ (\r -> bitmap $ (r^.effectImg) V.! 3 V.! i) $
-  size .~ 0 $
-  runAuto .~ run $
-  def
-
+effEnemyAttack :: (Given Resource) => Int -> Vec2 -> Effect
+effEnemyAttack i p = def & pos .~ p & scaleRate .~ 0 & runAuto .~ run
   where
-    run :: Danmaku EffectObject ()
+    resource = given :: Resource
+
+    run :: Danmaku EffectPiece ()
     run = hook $ Left $ do
-      f <- get
-      when (f^.counter <= 50) $ size += 1/50
+      use counter >>= \c -> when (c <= 50) $ scaleRate += 1/50
       ang += anglePlus i
-      counter %= (+1)
+      use ang >>= \a -> drawing .= do
+        rotateR a $ bitmap $ (resource^.effectImg) V.! 3 V.! i
     
     anglePlus :: Int -> Double
     anglePlus 0 = 1/300
@@ -69,93 +55,86 @@ effEnemyAttack i p =
     anglePlus 2 = 3/300
     anglePlus _ = error "otherwise case in anglePlus"
 
-effPlayerBack :: Effect
+effPlayerBack :: (Given Resource) => Effect
 effPlayerBack = def & runAuto .~ do
   p <- (^.player) `fmap` env
   c <- (^.counter) `fmap` self
   let n = p^.bombCount
   hook $ Left $ do
     let r = 65
-    counter %= (+1)
     pos .= (p^.pos)
-    size .= 0.6
-    img .= \resource -> do
+    scaleRate .= 0.6
+    drawing .= do
       color white $ thickness 1.0 $ circleOutline r
       forM_ [1..n] $ \i ->
         translate (V2 r 0 `rotate2` (2*pi*fromIntegral i/fromIntegral n + fromIntegral c*5*pi/360))
-          $ color white $ bitmap
-          $ getBulletBitmap (resource^.bulletImg) BallMedium Yellow
+          $ color white $ (makeBullet BallMedium Yellow def :: Bullet)^.drawing
 
-character :: Int -> Vec2 -> Stage Int
+character :: (Given Resource) => Int -> Vec2 -> Stage Int
 character n p = addEffect $ effFadeIn 30 $ eff where
-  eff :: Effect
+  resource = given :: Resource
+
   eff = def 
         & pos .~ p
-        & img .~ (\res -> bitmap $ (res^.portraits) V.! n)
+        & drawing .~ (draw $ bitmap $ (resource^.portraits) V.! n)
         & zIndex .~ Foreground
-        & runAuto .~ (hook $ Left $ counter %= (+1))
 
 delCharacter :: Int -> Stage ()
 delCharacter c = hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
 
-motionCommon :: Int -> MotionCommon -> State EnemyObject ()
+motionCommon :: (HasPiece c, HasObject c) => Int -> MotionCommon -> State c ()
 motionCommon time (Straight) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateChara .= Attack
+    statePiece .= Attack
   when (c == time + 120) $ do
     spXY .= V2 0 (-1.5)
-    stateChara .= Alive
-  when (c > time + 300) $ stateChara .= Dead
+    statePiece .= Alive
+  when (c > time + 300) $ statePiece .= Dead
 motionCommon time (Affine v) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateChara .= Attack
+    statePiece .= Attack
   when (c == time + 120) $ do
     spXY .= v
-    stateChara .= Alive
-  when (c > time + 300) $ stateChara .= Dead
+    statePiece .= Alive
+  when (c > time + 300) $ statePiece .= Dead
 motionCommon _ (Curve acc) = do
   c <- use counter
-  when (c == 0) $ do
-    spXY .= V2 0 3
-    stateChara .= Attack
-  when (c > 300) $ stateChara .= Dead
+  when (c == 0) $ spXY .= V2 0 3
+  when (c == 20) $ statePiece .= Attack
+  when (c > 300) $ statePiece .= Dead
   spXY %= (+ acc)
 motionCommon _ (Stay) = do
   c <- use counter
   when (c == 0) $ spXY .= V2 0 1.5
   when (c == 120) $ do
     spXY .= 0
-    stateChara .= Attack
+    statePiece .= Attack
 
-initEnemy :: Vec2 -> Int -> Enemy
-initEnemy p h =
-  pos .~ p $
-  hp .~ h $
-  def
+initEnemy :: (Given Resource) => Vec2 -> Int -> Enemy
+initEnemy p h = def
+  & pos .~ p & hp .~ h & size .~ V2 10 10 & ang .~ -pi/2
+  & statePiece .~ Standby & drawing .~ (bitmap $ (resource^.charaImg) V.! 1)
+  where
+    resource = given :: Resource
 
-zakoCommon :: Int -> State EnemyObject () -> Int -> BKind -> BColor -> Danmaku EnemyObject ()
+zakoCommon :: (Given Resource, HasChara c, HasPiece c, HasObject c) =>
+              Int -> State c () -> Int -> BKind -> BColor -> Danmaku c ()
 zakoCommon _ mot time bk c = do
   e <- self
   hook $ Left mot
   ang' <- anglePlayer
 
-  when ((e^.counter) `mod` time == 0 && e^.stateChara == Attack) $
-    shots $ return $
-      makeBullet $
-      pos .~ (e^.pos) $ 
-      speed .~ 2 $
-      ang .~ ang' $
-      kind .~ bk $
-      bcolor .~ c $
-      def
+  when ((e^.counter) `mod` time == 0 && e^.statePiece == Attack) $
+    shots $ return $ makeBullet bk c def
+      & pos .~ (e^.pos) & speed .~ 2 & ang .~ ang'
 
-debug :: Danmaku EnemyObject ()
+debug :: (Given Resource) => Danmaku Chara ()
 debug = do
   setName "デバッグ用弾幕"
   e <- self
@@ -165,65 +144,48 @@ debug = do
 
   when (cnt `mod` 4 == 0 && e ^. spXY == 0) $
     shots $ flip map [1..n] $ \i ->
-      makeBullet $
-      pos .~ (e^.pos) $ 
-      speed .~ 0.5 $
-      ang .~ i*2*pi/n + (fromIntegral cnt)/100 $
-      kind .~ BallTiny $
-      bcolor .~ Red $
-      def
+      makeBullet BallTiny Red def
+        & pos .~ (e^.pos) & speed .~ 0.5
+        & ang .~ i*2*pi/n + (fromIntegral cnt)/100
 
 chaosBomb :: (Given Resource) => Vec2 -> Bullet
-chaosBomb p =
-  pos .~ p $
-  kind .~ BallFrame $
-  bcolor .~ Magenta $
-  size .~ V2 100 0 $
-  stateBullet .~ PlayerB $
-  runAuto .~ run $
-  def
+chaosBomb p = makeBullet BallFrame Magenta def
+  & pos .~ p & size .~ 100 & group .~ GPlayer & runAuto .~ run
   
   where
-    bomb :: (HasObject c, Given Resource) => c -> Bullet -> Bullet
-    bomb e b = case b^.stateBullet == EnemyB && 
-                    (e^.size^._x)^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb (b^.pos) & size .~ V2 ((e^.size^._x) / 1.4) 0
+    bomb :: (Given Resource, HasPiece c, HasObject c) => c -> Bullet -> Bullet
+    bomb e b = case b^.group == GEnemy && 
+                    (e^.size^._x)^^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
+      True -> chaosBomb (b^.pos) & size //~ 1.4 & scaleRate //~ 1.4
       False -> b
     
-    run :: Danmaku BulletObject ()
+    run :: (Given Resource, HasPiece c, HasObject c) => Danmaku c ()
     run = do
       e <- self
-      when (e^.counter == 0) $ do
-        effs $ [eff e]
-        return ()
+      when (e^.counter == 0) $ effs $ [eff e]
       when (e^.counter == 5) $ hook $ Right $ bullets %= fmap (bomb e)
       
       hook $ Left $ do
-        counter %= (+1)
         c <- use counter
-        when (c == 10) $ stateBullet .= Outside
+        when (c == 10) $ statePiece .= Dead
 
-    eff :: (Given Resource) => BulletObject -> Effect
-    eff b = go $ zIndex .~ Background $ effCommonAnimated 4 (b^.pos) where
-      go :: Effect -> Effect
-      go e = let ratio = (b^.size^._x) / 120 in
-        e & size .~ V2 ratio ratio & slowRate .~ 3
+    eff :: (Given Resource, HasPiece c, HasObject c) => c -> Effect
+    eff b = effCommonAnimated 4 (b^.pos) & scaleRate .~ (100/120) & zIndex .~ OnObject
 
-silentBomb :: (Given Resource) => State Chara (S.Seq Bullet)
+silentBomb :: (Given Resource, HasChara c, HasObject c) => State c (S.Seq Bullet)
 silentBomb = use pos >>= return . S.singleton . chaosBomb
 
-fourDiamond :: (Given Resource) => State Chara (S.Seq Bullet)
+fourDiamond :: (Given Resource, HasChara c, HasObject c) => State c (S.Seq Bullet)
 fourDiamond = use pos >>= \p -> return $ S.fromList $
   [def' & pos .~ p + V2 5 0,
    def' & pos .~ p + V2 15 0,
    def' & pos .~ p - V2 5 0,
    def' & pos .~ p - V2 15 0]
   where
-    def' = makeBullet $ 
-      def & speed .~ 15 & ang .~ pi/2 & kind .~ Diamond
-          & bcolor .~ Red & stateBullet .~ PlayerB
+    def' = makeBullet Diamond Red def
+      & speed .~ 15 & ang .~ pi/2 & group .~ GPlayer
 
-stageTest :: Stage ()
+stageTest :: (Given Resource) => Stage ()
 stageTest = do
   let e r = keeper $ initEnemy (V2 320 (-40)) 10 & runAuto .~ r
   e $ zakoCommon 0 (motionCommon 100 Stay) 50 BallLarge Red
