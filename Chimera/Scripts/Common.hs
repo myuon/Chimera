@@ -71,13 +71,17 @@ effPlayerBack = def & runAuto .~ do
           $ color white $ (makeBullet BallMedium Yellow def :: Bullet)^.drawing
 
 character :: (Given Resource) => Int -> Vec2 -> Stage Int
-character n p = addEffect $ effFadeIn 30 $ eff where
-  resource = given :: Resource
+character n p = do
+  k <- addEffect $ effFadeIn 30 $ eff
+  hook $ Right $ sceneEffects %= (k:)
+  return k
+  where
+    resource = given :: Resource
 
-  eff = def 
-        & pos .~ p
-        & drawing .~ (draw $ bitmap $ (resource^.portraits) V.! n)
-        & zIndex .~ Foreground
+    eff = def 
+          & pos .~ p
+          & drawing .~ (draw $ bitmap $ (resource^.portraits) V.! n)
+          & zIndex .~ Foreground
 
 delCharacter :: Int -> Stage ()
 delCharacter c = hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
@@ -150,19 +154,19 @@ debug = do
 
 chaosBomb :: (Given Resource) => Vec2 -> Bullet
 chaosBomb p = makeBullet BallFrame Magenta def
-  & pos .~ p & size .~ 100 & group .~ GPlayer & runAuto .~ run
+  & pos .~ p & size .~ 100 & group .~ None & runAuto .~ run
   
   where
     bomb :: (Given Resource, HasPiece c, HasObject c) => c -> Bullet -> Bullet
     bomb e b = case b^.group == GEnemy && 
                     (e^.size^._x)^^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb (b^.pos) & size //~ 1.4 & scaleRate //~ 1.4
+      True -> chaosBomb (b^.pos) & size .~ (e^.size) / 1.4
       False -> b
     
     run :: (Given Resource, HasPiece c, HasObject c) => Danmaku c ()
     run = do
       e <- self
-      when (e^.counter == 0) $ effs $ [eff e]
+      when (e^.counter == 1) $ effs $ [eff e]
       when (e^.counter == 5) $ hook $ Right $ bullets %= fmap (bomb e)
       
       hook $ Left $ do
@@ -170,7 +174,8 @@ chaosBomb p = makeBullet BallFrame Magenta def
         when (c == 10) $ statePiece .= Dead
 
     eff :: (Given Resource, HasPiece c, HasObject c) => c -> Effect
-    eff b = effCommonAnimated 4 (b^.pos) & scaleRate .~ (100/120) & zIndex .~ OnObject
+    eff b = effCommonAnimated 4 (b^.pos)
+      & scaleRate .~ (b^.size^._x / 120) & zIndex .~ Background
 
 silentBomb :: (Given Resource, HasChara c, HasObject c) => State c (S.Seq Bullet)
 silentBomb = use pos >>= return . S.singleton . chaosBomb

@@ -21,7 +21,7 @@ import Data.Functor.Product
 import Chimera.Engine.Core.Util
 import Chimera.Engine.Core.Types
 
-data GroupFlag = GPlayer | GEnemy | None | All deriving (Eq, Show)
+data GroupFlag = GPlayer | GEnemy | None deriving (Eq, Show)
 data ZIndex = Invisible | Background | OnObject | Foreground deriving (Eq, Show)
 data StatePiece = Standby | Alive | Attack | Damaged | Dead deriving (Eq, Show)
 data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
@@ -64,7 +64,8 @@ data Field = Field {
   _effects :: IM.IntMap Effect,
   _counterF :: Int,
   _isDebug :: Bool,
-  _danmakuTitle :: String
+  _danmakuTitle :: String,
+  _sceneEffects :: [Int]
   }
 
 type Danmaku c = LookAt c Field
@@ -97,7 +98,7 @@ instance HasPiece Effect where piece = auto . piece
 instance HasEffectPiece Effect where effectPiece = auto
 
 instance Default Piece where
-  def = Piece def None (return ()) Alive 1.0
+  def = Piece def None (return ()) Standby 1.0
 
 instance Default EffectPiece where
   def = EffectPiece def Background 3
@@ -120,7 +121,7 @@ instance Default Player where
     }
 
 instance Default Field where
-  def = Field def S.empty S.empty IM.empty 0 False ""
+  def = Field def S.empty S.empty IM.empty 0 False "" []
 
 instance GUIClass Player where
   update = do
@@ -156,7 +157,7 @@ instance (HasPiece (Component a), HasObject (Component a)) =>
     sp <- use spXY
     pos += sp
 
-    counter %= (+1)
+    counter += 1
 
     let config = given :: Config
     use pos >>= \p -> unless (p `isInside` (config^.validArea)) $ do
@@ -174,7 +175,7 @@ instance (HasPiece (Component a), HasObject (Component a)) =>
 
 instance GUIClass Field where
   update = do
-    counterF %= (+1)
+    counterF += 1
     danmakuTitle .= ""
 
     collideObj
@@ -319,8 +320,7 @@ collide oc ob = let oc' = extend oc; ob' = extend ob; in
   detect ob' oc' || detect oc' ob'
   where
     extend :: (HasObject c) => c -> c
-    extend x = x & size -~ V2 (x^.speed) 0 `rotate2` (-x^.ang) + (x^.spXY)
---    extend x = x & size +~ (x^.speed) * (V2 1 0) `rotate2` (-x^.angle)
+    extend x = x & size -~ V2 (x^.speed) 0 + (x^.spXY)
 
     detect :: (HasObject c, HasObject c') => c -> c' -> Bool
     detect a b = 
@@ -350,7 +350,7 @@ areaBullet BallTiny = V2 2 2
 
 makeBullet :: (Given Resource, HasPiece c, HasObject c) => BKind -> BColor -> c -> c
 makeBullet bk bc b = let resource = given :: Resource in b
-  & size .~ areaBullet bk & group .~ GEnemy
+  & size .~ areaBullet bk & group .~ GEnemy & statePiece .~ Alive
   & drawing .~ (bitmap $ (resource^.bulletImg) V.! (fromEnum bk) V.! (fromEnum bc))
 
 collideObj :: (Given Resource) => State Field ()
@@ -368,7 +368,7 @@ collideObj = do
   where
     collideTo :: (HasPiece e, HasObject e) =>
                  GroupFlag -> e -> S.Seq Bullet -> (Int, S.Seq Bullet)
-    collideTo flag e = first S.length . S.partition (\b -> collide e b && (b^.group) == flag)
+    collideTo flag e = first S.length . S.partition (\b -> (b^.group) == flag && collide e b)
 
     damage :: (HasPiece c, HasChara c) => (StatePiece -> StatePiece) -> c -> Int -> c
     damage s e n

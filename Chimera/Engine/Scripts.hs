@@ -18,6 +18,7 @@ import Control.Monad.Reader
 import Data.Monoid ((<>))
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
+import qualified Data.Foldable as F
 import Data.Reflection (Given, given)
 
 import Chimera.Engine.Core
@@ -79,7 +80,10 @@ talk m = do
   m
   endTalk
   yield
---  hook $ Right $ effects .= IM.empty
+  hook $ Right $ do
+    ks <- use sceneEffects
+    effects %= \es -> foldl (flip IM.delete) es ks
+    sceneEffects .= []
   
   where
     startTalk = hook $ Left $ id .= Talk
