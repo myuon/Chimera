@@ -31,6 +31,11 @@ data Pattern p q x where
 
 type LookAt p q = ReifiedProgram (Pattern p q)
 
+data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
+             Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
+data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
+              deriving (Eq, Ord, Enum, Show)
+
 data Resource = Resource {
   _charaImg :: V.Vector Bitmap,
   _bulletImg :: V.Vector (V.Vector Bitmap),
@@ -40,7 +45,8 @@ data Resource = Resource {
   _layerBoard :: Bitmap,
   _portraits :: V.Vector Bitmap,
   _numbers :: V.Vector (Game ()),
-  _labels :: M.Map String (Game ())
+  _labels :: M.Map String (Game ()),
+  _areaBullet :: BKind -> Vec2
   }
 
 data Memory = Memory {

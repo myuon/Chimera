@@ -80,8 +80,19 @@ loadResource = do
     _layerBoard = la,
     _portraits = V.fromList [c1],
     _numbers = V.fromList ns,
-    _labels = M.fromList ls
+    _labels = M.fromList ls,
+    _areaBullet = areaBullet'
   }
+
+areaBullet' :: BKind -> Vec2
+areaBullet' BallLarge = V2 15 15
+areaBullet' BallMedium = V2 7 7
+areaBullet' BallSmall = V2 4 4
+areaBullet' Oval = V2 7 3
+areaBullet' Diamond = V2 5 3
+areaBullet' BallFrame = V2 5 5
+areaBullet' Needle = V2 30 1
+areaBullet' BallTiny = V2 2 2
 
 splitBulletBitmaps :: Bitmap -> V.Vector (V.Vector Bitmap)
 splitBulletBitmaps pic = 

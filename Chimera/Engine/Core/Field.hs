@@ -24,10 +24,6 @@ import Chimera.Engine.Core.Types
 data GroupFlag = GPlayer | GEnemy | None deriving (Eq, Show)
 data ZIndex = Invisible | Background | OnObject | Foreground deriving (Eq, Show)
 data StatePiece = Standby | Alive | Attack | Damaged | Dead deriving (Eq, Show)
-data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
-             Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
-data BColor = Red | Orange | Yellow | Green | Cyan | Blue | Purple | Magenta
-              deriving (Eq, Ord, Enum, Show)
 
 data Piece = Piece {
   _objectPiece :: Object,
@@ -338,19 +334,9 @@ collide oc ob = let oc' = extend oc; ob' = extend ob; in
       isInCentoredBox p' = let V2 px' py' = p' `rotate2` (-box^.ang) in
         abs px' < (box^.size^._x)/2 && abs py' < (box^.size^._y)/2
 
-areaBullet :: BKind -> Vec2
-areaBullet BallLarge = V2 15 15
-areaBullet BallMedium = V2 7 7
-areaBullet BallSmall = V2 4 4
-areaBullet Oval = V2 7 3
-areaBullet Diamond = V2 5 3
-areaBullet BallFrame = V2 5 5
-areaBullet Needle = V2 30 1
-areaBullet BallTiny = V2 2 2
-
 makeBullet :: (Given Resource, HasPiece c, HasObject c) => BKind -> BColor -> c -> c
 makeBullet bk bc b = let resource = given :: Resource in b
-  & size .~ areaBullet bk & group .~ GEnemy & statePiece .~ Alive
+  & size .~ (resource^.areaBullet) bk & group .~ GEnemy & statePiece .~ Alive
   & drawing .~ (bitmap $ (resource^.bulletImg) V.! (fromEnum bk) V.! (fromEnum bc))
 
 collideObj :: (Given Resource) => State Field ()

@@ -28,7 +28,7 @@ stage1 = do
 
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ debug
   keeper $ initEnemy (V2 320 (-40)) 100 & runAuto .~ boss4
-    
+  
   appearAt 5 $ initEnemy (V2 320 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 350 (-40)) 10 & runAuto .~ zako 10
   appearAt 5 $ initEnemy (V2 370 (-40)) 10 & runAuto .~ zako 10
