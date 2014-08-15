@@ -21,14 +21,17 @@ type Board a = M.Map (Int,Int) a
 (!?) :: Board a -> (Int,Int) -> Maybe a
 (!?) = flip M.lookup
 
-rule :: Int -> Bool
-rule n
+rule :: Bool -> Int -> Bool
+rule True n
   | 2 <= n && n <= 3 = True
+  | otherwise = False
+rule False n
+  | n == 3 = True
   | otherwise = False
 
 step :: Board Bool -> Board Bool
 step b = M.mapWithKey (\k _ -> sur k) b where
-  sur (x,y) = rule $ length $ filter (== Just True) $
+  sur (x,y) = rule ((\(Just x) -> x)$ b !? (x,y)) $ length $ filter (== Just True) $
     fmap (b!?) [(x-1,y-1),(x-1,y),(x-1,y+1),(x,y-1),(x,y+1),(x+1,y-1),(x+1,y),(x+1,y+1)]
 
 stage2 :: (Given Resource, Given Config) => Stage ()
