@@ -61,16 +61,16 @@ isStageRunning (Wait _) = False
 isStageRunning _ = True
 
 appearEnemy :: Enemy -> Stage ()
-appearEnemy e = lift $ hook $ Right $ enemies %= (insertIM e)
+appearEnemy e = lift $ zoom _2 $ enemies %= (insertIM e)
 
 wait :: Int -> Stage ()
 wait n = do
-  lift $ hook $ Left $ id .= Wait n
+  lift $ zoom _1 $ id .= Wait n
   yield
 
 stop :: Stage ()
 stop = do
-  lift $ hook $ Left $ id .= Stop
+  lift $ zoom _1 $ id .= Stop
   yield
 
 appearAt :: Int -> Enemy -> Stage ()
@@ -81,7 +81,7 @@ keeper e = appearEnemy e >> stop
 
 speak :: Expr -> Stage ()
 speak expr = do
-  lift $ hook $ Left $ id .= Speak expr
+  lift $ zoom _1 $ id .= Speak expr
   yield
 
 talk :: Stage () -> Stage ()
@@ -91,37 +91,35 @@ talk m = do
   m
   endTalk
   yield
-  lift $ hook $ Right $ do
+  lift $ zoom _2 $ do
     ks <- use sceneEffects
     effects %= \es -> foldl (flip IM.delete) es ks
     sceneEffects .= []
   
   where
-    startTalk = lift $ hook $ Left $ id .= Talk
-    endTalk = lift $ hook $ Left $ id .= Go
+    startTalk = lift $ zoom _1 $ id .= Talk
+    endTalk = lift $ zoom _1 $ id .= Go
 
 getPlayer :: Danmaku c Player
-getPlayer = (^.player) `fmap` env
+getPlayer = use (env.player)
 
 shots :: [Bullet] -> Danmaku c ()
-shots bs = hook $ Right $ bullets %= insertsIM' bs
+shots bs = zoom _2 $ bullets %= insertsIM' bs
 
---addEffect :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
---             Effect -> m (Pattern p q) Int
+addEffect :: Effect -> LookAt c Field Int
 addEffect e = do
-  m <- (^.effects) `fmap` env
+  m <- use (env.effects)
   let (n,m') = insertIM' e m
-  hook $ Right $ effects .= m'
+  zoom _2 $ effects .= m'
   return n
 
---effs :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
---           [Effect] -> m (Pattern p q) ()
-effs es = hook $ Right $ effects %= \s -> foldl (flip insertIM) s es
+effs :: [Effect] -> LookAt c Field ()
+effs es = zoom _2 $ effects %= \s -> foldr insertIM s es
 
 moveSmooth :: (HasObject a) => 
               Vec2 -> Int -> Autonomie (Danmaku a) a -> Autonomie (Danmaku a) a
 moveSmooth v time a = a & runAuto %~ (>> go) where
-  go = hook $ Left $ do
+  go = zoom _1 $ do
     let ang = pi / fromIntegral time
     c' <- use counter
     let c = c' - (a^.auto^.counter)
@@ -131,7 +129,7 @@ moveSmooth v time a = a & runAuto %~ (>> go) where
 
 effColored :: (Float -> Color) -> State EffectPiece () -> Int -> Effect -> Effect
 effColored f g time e = e & runAuto %~ (>> go) where
-  go = hook $ Left $ do
+  go = zoom _1 $ do
     c1 <- use counter
     let c = c1 - (e^.counter)
     when (0 <= c && c <= time) $ do
@@ -144,9 +142,9 @@ say' m = speak $ m <> clickend
 
 say :: Int -> Expr -> Stage ()
 say c m = do
-  lift $ hook $ Right $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
+  lift $ zoom _2 $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
   speak $ m <> clickend
-  lift $ hook $ Right $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
+  lift $ zoom _2 $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
   
 setName :: String -> Danmaku c ()
-setName s = hook $ Right $ danmakuTitle .= s
+setName s = zoom _2 $ danmakuTitle .= s

@@ -72,8 +72,8 @@ boss1 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss1 = do
   setName "回転弾"
   
-  e <- self
-  hook $ Left $ motionCommon 100 Stay
+  e <- use self
+  zoom _1 $ motionCommon 100 Stay
   when (e^.counter == 130) $ effs $ return $ effEnemyStart (e^.pos)
   when (e^.counter == 200) $ do
     mapM_ enemyEffect $ [
@@ -101,7 +101,7 @@ boss1 = do
         & runAuto %~ (go 100 270 >>)
 
   where
-    go t1 t2 = hook $ Left $ do
+    go t1 t2 = zoom _1 $ do
       cnt <- use counter
       when (30 < cnt && cnt < 200) $ do
         ang %= (+ pi/t1)
@@ -112,8 +112,8 @@ boss2 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss2 = do
   setName "分裂弾"
   
-  e <- self
-  hook $ Left $ motionCommon 100 Stay
+  e <- use self
+  zoom _1 $ motionCommon 100 Stay
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $
@@ -133,13 +133,13 @@ boss2 = do
   
   where
     go = do
-      b <- self
+      b <- use self
       let t = pi/3
       let time = 50
       when ((b^.counter) < 200 && (b^.counter) `mod` time == 0) $
         shots $ return $ def & auto .~ b & ang +~ t
       
-      hook $ Left $ do
+      zoom _1 $ do
         cnt <- use counter
         when (cnt < 200 && cnt `mod` time == 0) $ do
           speed += 1.5
@@ -150,8 +150,8 @@ boss3 :: (Given Resource, HasChara c, HasPiece c, HasObject c) => Danmaku c ()
 boss3 = do
   setName "爆発弾"
 
-  e <- self
-  hook $ Left $ motionCommon 100 Stay
+  e <- use self
+  zoom _1 $ motionCommon 100 Stay
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
@@ -169,11 +169,11 @@ boss3 = do
   
   where
     go = do
-      hook $ Left $ do
+      zoom _1 $ do
         use counter >>= \c -> when (c <= 150) $ speed -= 0.01
         counter += 1
 
-      b <- self
+      b <- use self
       let n = 8 :: Int
       when (b^.counter == 150) $
         shots $ flip map [0..n] $ \i ->
@@ -186,8 +186,8 @@ boss4 :: (Given Resource, HasPiece c, HasObject c, HasChara c) =>
 boss4 = do
   setName "ホーミング弾"
 
-  e <- self
-  hook $ Left $ motionCommon 100 Stay
+  e <- use self
+  zoom _1 $ motionCommon 100 Stay
   p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
@@ -206,7 +206,7 @@ boss4 = do
   where
     go = do
       ang' <- anglePlayer
-      hook $ Left $ do
+      zoom _1 $ do
         use counter >>= \c -> when (c <= 50) $ speed -= 0.02
         counter += 1
 

@@ -8,6 +8,7 @@ import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
 import Data.Reflection (Given, given)
+import Debug.Trace as T
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
@@ -17,7 +18,7 @@ data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 enemyEffect :: (HasPiece c, HasChara c) => Effect -> Danmaku c ()
 enemyEffect e = do
   n <- addEffect e
-  hook $ Left $ effectIndexes %= (n:)
+  zoom _1 $ effectIndexes %= (n:)
 
 effFadeIn :: Int -> Effect -> Effect
 effFadeIn n e = let y x = sin $ x*(pi/2) in
@@ -26,15 +27,15 @@ effFadeIn n e = let y x = sin $ x*(pi/2) in
 effFadeOut :: Int -> Effect -> Effect
 effFadeOut n e = let y x = cos $ (x*pi/2) in
   effColored (Color 1 1 1 . y) (drawing .= (color (Color 1 1 1 0) $ e^.drawing)) n e
-  & runAuto %~ (>> go)
+    & runAuto %~ (>> go)
   where
     go = do
-      c <- (^.counter) `fmap` self
-      hook $ Left $ when (n == c) $ statePiece .= Dead
+      c <- (^.counter) `fmap` use self
+      zoom _1 $ when (n == c) $ statePiece .= Dead
 
 effEnemyStart :: (Given Resource) => Vec2 -> Effect
 effEnemyStart = go . effCommonAnimated 2 where 
-  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> (hook $ Left $ size *= 1.01))
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 6 & runAuto %~ (>> (zoom _1 $ size *= 1.01))
 
 effEnemyAttack :: (Given Resource) => Int -> Vec2 -> Effect
 effEnemyAttack i p = def & pos .~ p & scaleRate .~ 0 & runAuto .~ run
@@ -42,7 +43,7 @@ effEnemyAttack i p = def & pos .~ p & scaleRate .~ 0 & runAuto .~ run
     resource = given :: Resource
 
     run :: Danmaku EffectPiece ()
-    run = hook $ Left $ do
+    run = zoom _1 $ do
       use counter >>= \c -> when (c <= 50) $ scaleRate += 1/50
       ang += anglePlus i
       use ang >>= \a -> drawing .= do
@@ -56,10 +57,10 @@ effEnemyAttack i p = def & pos .~ p & scaleRate .~ 0 & runAuto .~ run
 
 effPlayerBack :: (Given Resource) => Effect
 effPlayerBack = def & runAuto .~ do
-  p <- (^.player) `fmap` env
-  c <- (^.counter) `fmap` self
+  p <- (^.player) `fmap` use env
+  c <- (^.counter) `fmap` use self
   let n = p^.bombCount
-  hook $ Left $ do
+  zoom _1 $ do
     let r = 65
     pos .= (p^.pos)
     scaleRate .= 0.6
@@ -72,7 +73,7 @@ effPlayerBack = def & runAuto .~ do
 character :: (Given Resource) => Int -> Vec2 -> Stage Int
 character n p = do
   k <- lift $ addEffect $ effFadeIn 30 $ eff
-  lift $ hook $ Right $ sceneEffects %= (k:)
+  lift $ zoom _2 $ sceneEffects %= (k:)
   return k
   where
     resource = given :: Resource
@@ -83,7 +84,7 @@ character n p = do
           & zIndex .~ Foreground
 
 delCharacter :: Int -> Stage ()
-delCharacter c = lift $ hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
+delCharacter c = lift $ zoom _2 $ effects %= IM.adjust (effFadeOut 30) c
 
 motionCommon :: (HasPiece c, HasObject c) => Int -> MotionCommon -> State c ()
 motionCommon time (Straight) = do
@@ -129,8 +130,8 @@ initEnemy p h = def
 zakoCommon :: (Given Resource, HasChara c, HasPiece c, HasObject c) =>
               Int -> State c () -> Int -> BKind -> BColor -> Danmaku c ()
 zakoCommon _ mot time bk c = do
-  e <- self
-  hook $ Left mot
+  e <- use self
+  zoom _1 mot
   ang' <- anglePlayer
 
   when ((e^.counter) `mod` time == 0 && e^.statePiece == Attack) $
@@ -140,8 +141,8 @@ zakoCommon _ mot time bk c = do
 debug :: (Given Resource) => Danmaku Chara ()
 debug = do
   setName "デバッグ用弾幕"
-  e <- self
-  hook $ Left $ motionCommon 100 Stay  
+  e <- use self
+  zoom _1 $ motionCommon 100 Stay  
   let cnt = e ^. counter
   let n = 20
 
@@ -157,22 +158,26 @@ chaosBomb p = makeBullet BallFrame Magenta def
   
   where
     bomb :: (Given Resource, HasPiece c, HasObject c) => c -> Bullet -> Bullet
-    bomb e b = case b^.group == GEnemy && 
-                    (e^.size^._x)^^(2 :: Int) > (quadrance $ b^.pos - e^.pos) of 
-      True -> chaosBomb (b^.pos) & size .~ (e^.size) / 1.4
-      False -> b
-    
-    run :: (Given Resource, HasPiece c, HasObject c) => Danmaku c ()
+    bomb e b = chaosBomb (b^.pos) & size .~ (e^.size) / 1.4
+
+    inRange :: Piece -> Bullet -> Bool
+    inRange e b = b^.statePiece /= Dead && b^.group == GEnemy &&
+      (e^.size^._x)^(2 :: Int) > (quadrance $ b^.pos - e^.pos)
+
+    run :: (Given Resource) => Danmaku Piece ()
     run = do
-      e <- self
+      e <- use self
       when (e^.counter == 1) $ effs $ [eff e]
-      when (e^.counter == 5) $ hook $ Right $ bullets %= fmap (bomb e)
-      
-      hook $ Left $ do
+      when (e^.counter == 5) $ zoom _2 $ do
+        bs <- liftM (IM.filter (inRange e)) (use bullets)
+        bullets %= \y -> IM.foldrWithKey' (\k _ -> IM.adjust (statePiece .~ Dead) k) y bs
+        bullets %= \y -> IM.foldr insertIM y $ fmap (bomb e) bs
+
+      zoom _1 $ do
         c <- use counter
         when (c == 10) $ statePiece .= Dead
 
-    eff :: (Given Resource, HasPiece c, HasObject c) => c -> Effect
+    eff :: (Given Resource) => Piece -> Effect
     eff b = effCommonAnimated 4 (b^.pos)
       & scaleRate .~ (b^.size^._x / 120) & zIndex .~ Background
 
@@ -203,6 +208,6 @@ stageTest = do
 
 anglePlayer :: (HasObject c) => Danmaku c Double
 anglePlayer = do
-  e <- self
+  e <- use self
   p <- getPlayer
   return $ (pi/2 +) $ (\(V2 x y) -> atan2 x y) $ (e^.pos - p^.pos)

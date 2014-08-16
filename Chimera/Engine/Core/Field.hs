@@ -197,13 +197,6 @@ instance GUIClass Field where
             effects %= IM.adjust (execState $ statePiece .= Dead) i
 
       damagedEffects = do
-        {-
-        ds <- S.filter (\p -> p^.statePiece == Damaged) `fmap` use enemies
-        F.forM_ ds $ \e -> do
-          effects %= insertIM (effPlayerDead $ e^.pos)
-        enemies %= fmap (statePiece .~ Attack)
-        -}
-
         p <- use player
         when (p^.statePiece == Damaged) $
           effects %= insertIM (effPlayerDead $ p^.pos)
@@ -298,32 +291,15 @@ actPlayer = do
       | a == 0 = 0
       | otherwise = a + b
 
---runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
---runDanmaku = runLookAtAll
-
-{-
-scanAutonomies :: (Traversable f) => Lens' Field (f (Autonomie (Danmaku a) a)) -> State Field ()
-scanAutonomies member = do
-  f <- use id
-  let pairs = fmap (runEach f) $ f^.member
-  member .= (fmap (\(a, Pair s _) -> a & auto %~ execState s) pairs)
-  modify $ execState $ T.mapM (\(_, Pair _ t) -> t) pairs
-
-  where
-    runEach :: Field -> Autonomie (Danmaku a) a -> (Autonomie (Danmaku a) a, Product (State a) (State Field) ())
-    runEach f c = (,) c $ runDanmaku (c^.auto) f (c^.runAuto)
--}
-
 scanAutonomies :: Lens' Field (IM.IntMap (Component a)) -> State Field ()
 scanAutonomies member = do
-  as <- use member
-  f <- get
-  let (as',f') = IM.foldrWithKey' iter (as,f) as
-  put $ f'
-  member .= as'
+  put =<< liftM2 (IM.foldrWithKey' iter) get (use member)
+  put =<< liftM2 (IM.foldrWithKey' iter2) get (use member)
   where
-    iter k a (as,f) = let (at,f') = execState (a^.runAuto) (a^.auto,f) in
-      (IM.insert k (a & auto .~ at) as,f')
+  iter k a f = let (at,_) = execState (a^.runAuto) (a^.auto,f) in
+    f & member %~ IM.adjust (auto .~ at) k
+
+  iter2 k a f = let (_,f') = execState (a^.runAuto) (a^.auto,f) in f'
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
 collide oc ob = let oc' = extend oc; ob' = extend ob; in
@@ -376,7 +352,7 @@ collideObj = do
                  GroupFlag -> e -> IM.IntMap Bullet -> (e, IM.IntMap Bullet)
     collideTo flag e bs = IM.foldrWithKey' f (e,bs) bs where
       f k b (x,ys) = if (b^.group) == flag && collide e b
-        then (x & hp -~ 1,IM.adjust (statePiece .~ Dead) k ys)
+        then (x & hp -~ 1 & statePiece %~ if flag == GEnemy then const Damaged else id, IM.adjust (statePiece .~ Dead) k ys)
         else (x,ys)
 
 addBullet :: (Given Resource) => State Field ()
@@ -398,14 +374,14 @@ addBullet = do
 effPlayerDead :: (Given Resource) => Vec2 -> Effect
 effPlayerDead = go . effCommonAnimated 1 where
   go :: Effect -> Effect
-  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> (hook $ Left $ size *= 1.01))
+  go e = e & size .~ V2 0.8 0.8 & slowRate .~ 5 & runAuto %~ (>> (zoom self $ size *= 1.01))
 
 effEnemyDead :: (Given Resource) => Vec2 -> Effect
 effEnemyDead = effCommonAnimated 0
 
 effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
 effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
-  run = hook $ Left $ do
+  run = zoom self $ do
     let resource = given :: Resource
     f <- get
     let i = (f^.counter) `div` (f^.slowRate)

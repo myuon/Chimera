@@ -4,8 +4,6 @@ module Chimera.Engine.Core.Types where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.Operational.Mini
-import Control.Monad.Operational.TH (makeSingletons)
 import Control.Monad.State.Strict
 import Control.Monad.Coroutine
 import qualified Data.Vector as V
@@ -22,35 +20,13 @@ auto = (\f (Autonomie a r) -> (\a' -> Autonomie a' r) `fmap` f a)
 runAuto :: Lens' (Autonomie m a) (m ())
 runAuto = (\f (Autonomie a r) -> (\r' -> Autonomie a r') `fmap` f r)
 
-{-
-class Autonomic c m a | c -> a, c -> m where
-  autonomie :: Lens' c (Autonomie m a)
-  auto :: (Autonomic c m a) => Lens' c a
-  runAuto :: (Autonomic c m a) => Lens' c (m ())
-  
-  auto = autonomie . (\f (Autonomie a r) -> (\a' -> Autonomie a' r) `fmap` f a)
-  runAuto = autonomie . (\f (Autonomie a r) -> (\r' -> Autonomie a r') `fmap` f r)
--}
-{-
-data Pattern p q x where
-  Hook :: Either (State p ()) (State q ()) -> Pattern p q ()
-  Self :: Pattern p q p
-  Env :: Pattern p q q
-  Yield :: Pattern p q ()
-
-type LookAt p q = ReifiedProgram (Pattern p q)
--}
-
 type LookAt p q = State (p,q)
-hook :: Either (State p ()) (State q ()) -> State (p,q) ()
-hook (Left p) = zoom _1 p
-hook (Right p) = zoom _2 p
 
-self :: State (p,q) p
-self = use _1
+self :: Lens' (p,q) p
+self = _1
 
-env :: State (p,q) q
-env = use _2
+env :: Lens' (p,q) q
+env = _2
 
 data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
              Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
@@ -97,13 +73,11 @@ class GUIClass c where
   update :: (Given Resource, Given Config) => State c ()
   paint :: (Given Resource) => StateT c Game ()
 
---makeSingletons ''Pattern 
 makeLenses ''Resource
 makeLenses ''Memory
 makeLenses ''Config
 makeClassy ''Object
 
---instance Autonomic (Autonomie m a) m a where autonomie = id
 instance (Eq a) => Eq (Autonomie m a) where a == b = a^.auto == b^.auto
 instance (Show a) => Show (Autonomie m a) where show a = show $ a^.auto
 
@@ -119,24 +93,3 @@ instance Default Object where
     _counter = 0,
     _size = V2 1 1
     }
-
-{-
-runLookAt :: p -> q -> LookAt p q () -> 
-             State (Product (State p) (State q) ()) (LookAt p q ())
-runLookAt p q = go where
-  go (Hook (Left f) :>>= next) = modify (>> Pair f (return ())) >> go (next ())
-  go (Hook (Right g) :>>= next) = modify (>> Pair (return ()) g) >> go (next ())
-  go (Self :>>= next) = get >>= \(Pair f _) -> go (next $ f `execState` p)
-  go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
-  go (Yield :>>= next) = return (next ())
-  go (Return next) = return (Return next)
-
-runLookAtAll :: p -> q -> LookAt p q () -> Product (State p) (State q) ()
-runLookAtAll p q m = go m `execState` return () where
-  go (Hook (Left f) :>>= next) = modify (>> Pair f (return ())) >> go (next ())
-  go (Hook (Right g) :>>= next) = modify (>> Pair (return ()) g) >> go (next ())
-  go (Self :>>= next) = get >>= \(Pair f _) -> go (next $ f `execState` p)
-  go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
-  go (Yield :>>= next) = go (next ())
-  go (Return _) = return ()
--}

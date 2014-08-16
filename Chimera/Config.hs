@@ -38,7 +38,7 @@ loadConfig = return $ Config {}
 loadGameConfig :: (Given Resource, Given Config) => Game GameConfig
 loadGameConfig = do
   m <- readBitmap "data/img/map0.png"
-  return $ GameConfig { _defStage = stage2 }
+  return $ GameConfig { _defStage = stage1 }
     & defPlayer .~ def { _shotZ = fourDiamond, _shotX = silentBomb, _bombCount = 5 }
     & defSelectMap .~ SelectMap { _mapinfo = marf, _pointing2 = ("マーフの街", V2 468 371) }
     & defMapBitmap .~ m

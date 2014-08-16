@@ -48,9 +48,9 @@ gameOfLife :: (Given Resource, Given Config, HasChara c, HasPiece c, HasObject c
 gameOfLife = do
   setName "Conway's Game of Life"
   
-  hook $ Left $ motionCommon 100 Stay
+  zoom _1 $ motionCommon 100 Stay
 
-  s <- self
+  s <- use self
   when (s^.counter == 130) $ enemyEffect $ effGrid
   when (s^.counter `mod` 100 == 0 && s^.counter >= 300) $ do
     let b = (iterate step $ lineBoard w' h') !! ((s^.counter - 300) `div` 100)
@@ -59,7 +59,7 @@ gameOfLife = do
         & pos .~ (fromIntegral $ n`div`2) + V2 (fromIntegral $ x*n) (fromIntegral $ y*n)
         & speed .~ 0
         & runAuto .~ do 
-          hook $ Left $ do
+          zoom _1 $ do
             use counter >>= \c -> when (c == 50) $ statePiece .= Dead
 
   where
@@ -81,8 +81,8 @@ gameOfLife = do
     effGrid :: Effect
     effGrid =
       def & zIndex .~ Background & runAuto .~ do
-        c <- (^.counter) `fmap` self
-        hook $ Left $ do
+        c <- (^.counter) `fmap` use self
+        zoom _1 $ do
           drawing .= case ((truncate h) `div` intv <= c) of
             True -> lx w >> ly h
             False -> do
