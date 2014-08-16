@@ -7,6 +7,7 @@ module Chimera.Scripts.Stage2 (
 import FreeGame
 import Control.Lens
 import Control.Arrow
+import Control.Monad.Trans (lift)
 import Data.Default (def)
 import Data.Reflection (Given, given)
 import qualified Data.Map as M
@@ -36,7 +37,7 @@ step b = M.mapWithKey (\k _ -> sur k) b where
 
 stage2 :: (Given Resource, Given Config) => Stage ()
 stage2 = do
-  addEffect effPlayerBack
+  lift $ addEffect effPlayerBack
 
   wait 50
 

@@ -1,9 +1,9 @@
 {-# LANGUAGE GADTs, TypeSynonymInstances, FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses, FlexibleContexts, UndecidableInstances #-}
-{-# LANGUAGE TypeOperators, DataKinds, Rank2Types #-}
+{-# LANGUAGE TypeOperators, DataKinds, Rank2Types, DeriveFunctor #-}
 module Chimera.Engine.Scripts (
   Controller(..), Stage, isShooting, isStageRunning
-  , runController, appearAt, keeper
+  , runStage, runController, appearAt, keeper
   , getPlayer, shots, wait, addEffect, effs
   , effColored -- , effCommonAnimated
   , talk, say', say
@@ -15,8 +15,8 @@ import Control.Lens
 import Control.Monad.State.Strict
 import Control.Monad.Operational.Mini
 import Control.Monad.Reader
+import Control.Monad.Coroutine
 import Data.Monoid ((<>))
-import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Foldable as F
 import Data.Reflection (Given, given)
@@ -25,14 +25,25 @@ import Chimera.Engine.Core
 
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
 
-type Stage = LookAt Controller Field
+data Yield x = Yield x deriving (Functor)
+
+yield :: (Monad m) => Coroutine Yield m ()
+yield = suspend (Yield $ return ())
+
+type Stage a = Coroutine Yield (LookAt Controller Field) a
+
+runStage :: Controller -> Field -> Stage () -> ((Controller, Field), Stage ())
+runStage c f m = let (r,s) = runState (resume m) (c,f) in
+  case r of
+    Left (Yield k) -> (s,k)
+    _ -> (s,return ())
 
 runController :: Controller -> Reader Field Controller
 runController (Wait n) = case n == 0 of
   True -> return Go
   False -> return $ Wait (n-1)
 runController Stop = do
-  es <- (S.length . (^.enemies)) `fmap` ask
+  es <- (IM.size . (^.enemies)) `fmap` ask
   case es == 0 of
     True -> return Go
     False -> return Stop
@@ -50,16 +61,16 @@ isStageRunning (Wait _) = False
 isStageRunning _ = True
 
 appearEnemy :: Enemy -> Stage ()
-appearEnemy e = hook $ Right $ enemies %= (S.|> e)
+appearEnemy e = lift $ hook $ Right $ enemies %= (insertIM e)
 
 wait :: Int -> Stage ()
 wait n = do
-  hook $ Left $ id .= Wait n
+  lift $ hook $ Left $ id .= Wait n
   yield
 
 stop :: Stage ()
 stop = do
-  hook $ Left $ id .= Stop
+  lift $ hook $ Left $ id .= Stop
   yield
 
 appearAt :: Int -> Enemy -> Stage ()
@@ -70,7 +81,7 @@ keeper e = appearEnemy e >> stop
 
 speak :: Expr -> Stage ()
 speak expr = do
-  hook $ Left $ id .= Speak expr
+  lift $ hook $ Left $ id .= Speak expr
   yield
 
 talk :: Stage () -> Stage ()
@@ -80,40 +91,40 @@ talk m = do
   m
   endTalk
   yield
-  hook $ Right $ do
+  lift $ hook $ Right $ do
     ks <- use sceneEffects
     effects %= \es -> foldl (flip IM.delete) es ks
     sceneEffects .= []
   
   where
-    startTalk = hook $ Left $ id .= Talk
-    endTalk = hook $ Left $ id .= Go
+    startTalk = lift $ hook $ Left $ id .= Talk
+    endTalk = lift $ hook $ Left $ id .= Go
 
 getPlayer :: Danmaku c Player
 getPlayer = (^.player) `fmap` env
 
 shots :: [Bullet] -> Danmaku c ()
-shots bs = hook $ Right $ bullets ><= S.fromList bs
+shots bs = hook $ Right $ bullets %= insertsIM' bs
 
-addEffect :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
-             Effect -> m (Pattern p q) Int
+--addEffect :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
+--             Effect -> m (Pattern p q) Int
 addEffect e = do
   m <- (^.effects) `fmap` env
   let (n,m') = insertIM' e m
   hook $ Right $ effects .= m'
   return n
 
-effs :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
-           [Effect] -> m (Pattern p q) ()
+--effs :: (Pattern p q :! m (Pattern p q), q ~ Field, Functor (m (Pattern p q))) =>
+--           [Effect] -> m (Pattern p q) ()
 effs es = hook $ Right $ effects %= \s -> foldl (flip insertIM) s es
 
-moveSmooth :: (Autonomic c (Danmaku a) a, HasObject a, HasObject c) => 
-              Vec2 -> Int -> c -> c
+moveSmooth :: (HasObject a) => 
+              Vec2 -> Int -> Autonomie (Danmaku a) a -> Autonomie (Danmaku a) a
 moveSmooth v time a = a & runAuto %~ (>> go) where
   go = hook $ Left $ do
     let ang = pi / fromIntegral time
     c' <- use counter
-    let c = c' - (a^.counter)
+    let c = c' - (a^.auto^.counter)
     when (0 <= c && c <= time) $ do
       let t = ang * (fromIntegral $ c)
       pos += ((ang * 0.5 * sin t) *^ v)
@@ -133,9 +144,9 @@ say' m = speak $ m <> clickend
 
 say :: Int -> Expr -> Stage ()
 say c m = do
-  hook $ Right $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
+  lift $ hook $ Right $ effects %= IM.adjust (moveSmooth (V2 (-80) 0) 50) c
   speak $ m <> clickend
-  hook $ Right $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
+  lift $ hook $ Right $ effects %= IM.adjust (moveSmooth (V2 80 0) 50) c
   
 setName :: String -> Danmaku c ()
 setName s = hook $ Right $ danmakuTitle .= s

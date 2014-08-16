@@ -7,6 +7,7 @@ module Chimera.Scripts.Stage1 (
 import FreeGame
 import Control.Lens
 import Control.Monad.State.Strict (modify)
+import Control.Monad.Trans (lift)
 import Data.Default (def)
 import Data.Reflection (Given, given)
 
@@ -16,7 +17,7 @@ import Chimera.Scripts.Common
 
 stage1 :: (Given Resource) => Stage ()
 stage1 = do
-  addEffect effPlayerBack
+  lift $ addEffect effPlayerBack
   talk $ do
     say' $ aline "メッセージのテスト"
     lufe <- character 0 $ V2 500 300

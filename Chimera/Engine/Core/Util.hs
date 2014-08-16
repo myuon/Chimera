@@ -6,7 +6,7 @@ module Chimera.Engine.Core.Util (
   , cutIntoN
   , (><=)
   , rot2M, rotate2
-  , insertIM, insertIM'
+  , insertIM, insertIM', insertsIM'
   ) where
 
 import FreeGame
@@ -45,10 +45,9 @@ insertIM :: a -> IM.IntMap a -> IM.IntMap a
 insertIM a m = snd $ insertIM' a m
 
 insertIM' :: a -> IM.IntMap a -> (Int, IM.IntMap a)
-insertIM' a m = case n `IM.member` m of
-  True -> (n', IM.insert n' a m)
-  False -> (n, IM.insert n a m)
-  
-  where
-    n = IM.size m
-    n' = head [x | x <- [0..], x `IM.notMember` m]
+insertIM' a m
+  | IM.size m == 0 = (0,IM.insert 0 a m)
+  | otherwise = let (k,_) = IM.findMax m in (k+1,IM.insert (k+1) a m)
+
+insertsIM' :: [a] -> IM.IntMap a -> IM.IntMap a
+insertsIM' as m = foldr insertIM m as

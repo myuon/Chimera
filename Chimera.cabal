@@ -29,4 +29,5 @@ executable Chimera
                    , vector >=0.10
                    , transformers >=0.2
                    , reflection >=1.0 && <2
+                   , monad-coroutine >=0.8
   ghc-options:       -O2 -Wall

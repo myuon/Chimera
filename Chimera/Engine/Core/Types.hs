@@ -1,4 +1,4 @@
-{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, GADTs #-}
+{-# LANGUAGE TemplateHaskell, MultiParamTypeClasses, GADTs, DeriveFunctor #-}
 {-# LANGUAGE FunctionalDependencies, FlexibleContexts, FlexibleInstances #-}
 module Chimera.Engine.Core.Types where
 
@@ -7,6 +7,7 @@ import Control.Lens
 import Control.Monad.Operational.Mini
 import Control.Monad.Operational.TH (makeSingletons)
 import Control.Monad.State.Strict
+import Control.Monad.Coroutine
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import Data.Default
@@ -15,6 +16,13 @@ import Data.Reflection (Given, given)
 
 data Autonomie m a = Autonomie a (m ())
 
+auto :: Lens' (Autonomie m a) a
+auto = (\f (Autonomie a r) -> (\a' -> Autonomie a' r) `fmap` f a)
+
+runAuto :: Lens' (Autonomie m a) (m ())
+runAuto = (\f (Autonomie a r) -> (\r' -> Autonomie a r') `fmap` f r)
+
+{-
 class Autonomic c m a | c -> a, c -> m where
   autonomie :: Lens' c (Autonomie m a)
   auto :: (Autonomic c m a) => Lens' c a
@@ -22,7 +30,8 @@ class Autonomic c m a | c -> a, c -> m where
   
   auto = autonomie . (\f (Autonomie a r) -> (\a' -> Autonomie a' r) `fmap` f a)
   runAuto = autonomie . (\f (Autonomie a r) -> (\r' -> Autonomie a r') `fmap` f r)
-
+-}
+{-
 data Pattern p q x where
   Hook :: Either (State p ()) (State q ()) -> Pattern p q ()
   Self :: Pattern p q p
@@ -30,6 +39,18 @@ data Pattern p q x where
   Yield :: Pattern p q ()
 
 type LookAt p q = ReifiedProgram (Pattern p q)
+-}
+
+type LookAt p q = State (p,q)
+hook :: Either (State p ()) (State q ()) -> State (p,q) ()
+hook (Left p) = zoom _1 p
+hook (Right p) = zoom _2 p
+
+self :: State (p,q) p
+self = use _1
+
+env :: State (p,q) q
+env = use _2
 
 data BKind = BallLarge | BallMedium | BallSmall | BallFrame | BallTiny |
              Oval | Diamond | Needle deriving (Eq, Ord, Enum, Show)
@@ -76,13 +97,13 @@ class GUIClass c where
   update :: (Given Resource, Given Config) => State c ()
   paint :: (Given Resource) => StateT c Game ()
 
-makeSingletons ''Pattern 
+--makeSingletons ''Pattern 
 makeLenses ''Resource
 makeLenses ''Memory
 makeLenses ''Config
 makeClassy ''Object
 
-instance Autonomic (Autonomie m a) m a where autonomie = id
+--instance Autonomic (Autonomie m a) m a where autonomie = id
 instance (Eq a) => Eq (Autonomie m a) where a == b = a^.auto == b^.auto
 instance (Show a) => Show (Autonomie m a) where show a = show $ a^.auto
 
@@ -99,6 +120,7 @@ instance Default Object where
     _size = V2 1 1
     }
 
+{-
 runLookAt :: p -> q -> LookAt p q () -> 
              State (Product (State p) (State q) ()) (LookAt p q ())
 runLookAt p q = go where
@@ -117,4 +139,4 @@ runLookAtAll p q m = go m `execState` return () where
   go (Env :>>= next) = get >>= \(Pair _ g) -> go (next $ g `execState` q)
   go (Yield :>>= next) = go (next ())
   go (Return _) = return ()
-
+-}

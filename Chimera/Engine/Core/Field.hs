@@ -1,13 +1,12 @@
 {-# LANGUAGE TemplateHaskell, Rank2Types, FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances, ConstraintKinds #-}
 module Chimera.Engine.Core.Field where
 
 import FreeGame
 import Control.Lens
 import Control.Arrow
 import Control.Monad.State.Strict
-import qualified Data.Sequence as S
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntMap as IM
@@ -42,21 +41,21 @@ data EffectPiece = EffectPiece {
 data Chara = Chara {
   _pieceChara :: Piece,
   _hp :: Int,
-  _effectIndexes :: S.Seq Int
+  _effectIndexes :: [Int]
   }
 
 data Player = Player {
   _charaPlayer :: Chara,
   _keysPlayer :: M.Map Key Int,
-  _shotZ :: (Given Resource) => State Chara (S.Seq Bullet),
-  _shotX :: (Given Resource) => State Chara (S.Seq Bullet),
+  _shotZ :: (Given Resource) => State Chara [Bullet],
+  _shotX :: (Given Resource) => State Chara [Bullet],
   _bombCount :: Int
   }
 
 data Field = Field {
   _player :: Player,
-  _enemies :: S.Seq Enemy,
-  _bullets :: S.Seq Bullet,
+  _enemies :: IM.IntMap Enemy,
+  _bullets :: IM.IntMap Bullet,
   _effects :: IM.IntMap Effect,
   _counterF :: Int,
   _isDebug :: Bool,
@@ -75,6 +74,8 @@ makeClassy ''Piece
 makeClassy ''EffectPiece
 makeLenses ''Player
 makeLenses ''Field
+
+type EnemyLike c = (HasObject c, HasChara c, HasPiece c)
 
 instance HasObject Piece where object = objectPiece
 instance HasPiece Chara where piece = pieceChara
@@ -100,7 +101,7 @@ instance Default EffectPiece where
   def = EffectPiece def Background 3
 
 instance Default Chara where
-  def = Chara def 10 S.empty
+  def = Chara def 10 []
 
 instance Default Player where
   def = Player {
@@ -117,7 +118,7 @@ instance Default Player where
     }
 
 instance Default Field where
-  def = Field def S.empty S.empty IM.empty 0 False "" []
+  def = Field def IM.empty IM.empty IM.empty 0 False "" []
 
 instance GUIClass Player where
   update = do
@@ -182,14 +183,14 @@ instance GUIClass Field where
     scanAutonomies bullets
     scanAutonomies effects
 
-    enemies %= S.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
-    bullets %= S.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
+    enemies %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
+    bullets %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
     effects %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
     player %= execState update
     
     where
       deadEnemyEffects = do
-        ds <- S.filter (\p -> p^.statePiece == Dead) `fmap` use enemies
+        ds <- IM.filter (\p -> p^.statePiece == Dead) `fmap` use enemies
         F.forM_ ds $ \e -> do
           effects %= insertIM (effEnemyDead $ e^.pos)
           F.forM_ (e^.effectIndexes) $ \i ->
@@ -254,10 +255,10 @@ instance GUIClass Field where
         drawScore 90 =<< use (player.hp)
 
         lift $ translate (V2 430 170) $ ls M.! "bullets"
-        drawScore 170 . S.length =<< use bullets
+        drawScore 170 . IM.size =<< use bullets
 
         lift $ translate (V2 430 190) $ ls M.! "enemies"
-        drawScore 190 . S.length =<< use enemies
+        drawScore 190 . IM.size =<< use enemies
 
         lift $ translate (V2 430 210) $ ls M.! "effects"
         drawScore 210 . IM.size =<< use effects
@@ -297,9 +298,10 @@ actPlayer = do
       | a == 0 = 0
       | otherwise = a + b
 
-runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
-runDanmaku = runLookAtAll
+--runDanmaku :: c -> Field -> Danmaku c () -> Product (State c) (State Field) ()
+--runDanmaku = runLookAtAll
 
+{-
 scanAutonomies :: (Traversable f) => Lens' Field (f (Autonomie (Danmaku a) a)) -> State Field ()
 scanAutonomies member = do
   f <- use id
@@ -310,6 +312,18 @@ scanAutonomies member = do
   where
     runEach :: Field -> Autonomie (Danmaku a) a -> (Autonomie (Danmaku a) a, Product (State a) (State Field) ())
     runEach f c = (,) c $ runDanmaku (c^.auto) f (c^.runAuto)
+-}
+
+scanAutonomies :: Lens' Field (IM.IntMap (Component a)) -> State Field ()
+scanAutonomies member = do
+  as <- use member
+  f <- get
+  let (as',f') = IM.foldrWithKey' iter (as,f) as
+  put $ f'
+  member .= as'
+  where
+    iter k a (as,f) = let (at,f') = execState (a^.runAuto) (a^.auto,f) in
+      (IM.insert k (a & auto .~ at) as,f')
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
 collide oc ob = let oc' = extend oc; ob' = extend ob; in
@@ -343,33 +357,27 @@ collideObj :: (Given Resource) => State Field ()
 collideObj = do
   es <- use enemies
   bs <- use bullets
-  let (es',bs') = collideSeq GPlayer es bs
+  let (es',bs') = collides GPlayer es bs
   enemies .= es'
 
   p <- use player
-  let (p',bs'') = collideSeq GEnemy (S.singleton p) bs'
-  player .= S.index p' 0
+  let (p',bs'') = collideTo GEnemy p bs'
+  player .= p'
   bullets .= bs''
 
   where
-    collideTo :: (HasPiece e, HasObject e) =>
-                 GroupFlag -> e -> S.Seq Bullet -> (Int, S.Seq Bullet)
-    collideTo flag e = first S.length . S.partition (\b -> (b^.group) == flag && collide e b)
+    collides :: (EnemyLike e) =>
+                GroupFlag -> IM.IntMap e -> IM.IntMap Bullet -> (IM.IntMap e, IM.IntMap Bullet)
+    collides flag es bs = IM.foldrWithKey' f (es,bs) es where
+      f k e (xs,ys) = let (e',ys') = collideTo flag e ys in (IM.insert k (hpCheck e') es,ys')
+      hpCheck x = if (x^.hp) <= 0 then x & statePiece .~ Dead else x
 
-    damage :: (HasPiece c, HasChara c) => (StatePiece -> StatePiece) -> c -> Int -> c
-    damage s e n
-      | n == 0 = e
-      | otherwise = let e' = e & hp -~ n in
-      case e'^.hp > 0 of
-        True -> e' & statePiece %~ s
-        False -> e' & statePiece .~ Dead
-
-    collideSeq :: (HasPiece e, HasChara e, HasObject e) => 
-                  GroupFlag -> S.Seq e -> S.Seq Bullet -> (S.Seq e, S.Seq Bullet)
-    collideSeq flag es bs = F.foldl k (S.empty, bs) es where
-      k (es', bs') e = let (dmg, bsc) = collideTo flag e bs' in case flag of
-        GPlayer -> (es' S.|> damage id e dmg, bsc)
-        _ -> (es' S.|> damage (const Damaged) e dmg, bsc)
+    collideTo :: (EnemyLike e) =>
+                 GroupFlag -> e -> IM.IntMap Bullet -> (e, IM.IntMap Bullet)
+    collideTo flag e bs = IM.foldrWithKey' f (e,bs) bs where
+      f k b (x,ys) = if (b^.group) == flag && collide e b
+        then (x & hp -~ 1,IM.adjust (statePiece .~ Dead) k ys)
+        else (x,ys)
 
 addBullet :: (Given Resource) => State Field ()
 addBullet = do
@@ -378,13 +386,13 @@ addBullet = do
   when (keys M.! charToKey 'Z' > 0 && cnt `mod` 10 == 0) $ do
     s <- use (player.shotZ)
     p <- use (player.charaPlayer)
-    bullets ><= evalState s p
+    bullets %= insertsIM' (evalState s p)
 
   n <- use (player.bombCount)
   when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0 && n > 0) $ do
     s <- use (player.shotX)
     p <- use (player.charaPlayer)
-    bullets ><= evalState s p
+    bullets %= insertsIM' (evalState s p)
     zoom player $ bombCount -= 1
 
 effPlayerDead :: (Given Resource) => Vec2 -> Effect

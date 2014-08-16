@@ -31,17 +31,14 @@ data GameFrame = GameFrame {
 
 makeLenses ''GameFrame
 
-runStage :: GameLoop ()
-runStage = do
+stageLoop :: GameLoop ()
+stageLoop = do
   controller <~ liftM2 (\c -> runReader (runController c)) (use controller) (use field)
   use controller >>= \c -> when (isStageRunning c) $ do
-    (s, Pair f g) <- liftM3 run (use controller) (use field) (use stage)
+    ((con,f),s) <- liftM3 runStage (use controller) (use field) (use stage)
     stage .= s
-    field %= execState g
-    controller .= execState f c
-
-  where
-    run p q m = runLookAt p q m `runState` Pair (return ()) (return ())
+    field .= f
+    controller .= con
 
 menuloop :: (Given Resource) => GameLoop ()
 menuloop = do
@@ -69,7 +66,7 @@ stgloop = do
   field %= execState update
 
   use controller >>= \r -> case isShooting r of 
-    True -> runStage
+    True -> stageLoop
     False -> running .= talkloop
   
 talkloop :: (Given Resource, Given Config) => GameLoop ()
@@ -81,7 +78,7 @@ talkloop = do
 
   use (mEngine.stateEngine) >>= \s -> do
     when (s == End) $ do
-      runStage
+      stageLoop
       use controller >>= \c -> id %= execState (runTalk c)
 
   use (mEngine.stateEngine) >>= \s -> do

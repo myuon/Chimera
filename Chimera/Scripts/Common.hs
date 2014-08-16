@@ -7,7 +7,6 @@ import Control.Monad.State.Strict
 import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
-import qualified Data.Sequence as S
 import Data.Reflection (Given, given)
 
 import Chimera.Engine.Core
@@ -18,7 +17,7 @@ data MotionCommon = Straight | Affine Vec2 | Curve Vec2 | Stay
 enemyEffect :: (HasPiece c, HasChara c) => Effect -> Danmaku c ()
 enemyEffect e = do
   n <- addEffect e
-  hook $ Left $ effectIndexes %= (S.|> n)
+  hook $ Left $ effectIndexes %= (n:)
 
 effFadeIn :: Int -> Effect -> Effect
 effFadeIn n e = let y x = sin $ x*(pi/2) in
@@ -72,8 +71,8 @@ effPlayerBack = def & runAuto .~ do
 
 character :: (Given Resource) => Int -> Vec2 -> Stage Int
 character n p = do
-  k <- addEffect $ effFadeIn 30 $ eff
-  hook $ Right $ sceneEffects %= (k:)
+  k <- lift $ addEffect $ effFadeIn 30 $ eff
+  lift $ hook $ Right $ sceneEffects %= (k:)
   return k
   where
     resource = given :: Resource
@@ -84,7 +83,7 @@ character n p = do
           & zIndex .~ Foreground
 
 delCharacter :: Int -> Stage ()
-delCharacter c = hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
+delCharacter c = lift $ hook $ Right $ effects %= IM.adjust (effFadeOut 30) c
 
 motionCommon :: (HasPiece c, HasObject c) => Int -> MotionCommon -> State c ()
 motionCommon time (Straight) = do
@@ -177,11 +176,11 @@ chaosBomb p = makeBullet BallFrame Magenta def
     eff b = effCommonAnimated 4 (b^.pos)
       & scaleRate .~ (b^.size^._x / 120) & zIndex .~ Background
 
-silentBomb :: (Given Resource, HasChara c, HasObject c) => State c (S.Seq Bullet)
-silentBomb = use pos >>= return . S.singleton . chaosBomb
+silentBomb :: (Given Resource, HasChara c, HasObject c) => State c [Bullet]
+silentBomb = use pos >>= return . return . chaosBomb
 
-fourDiamond :: (Given Resource, HasChara c, HasObject c) => State c (S.Seq Bullet)
-fourDiamond = use pos >>= \p -> return $ S.fromList $
+fourDiamond :: (Given Resource, HasChara c, HasObject c) => State c [Bullet]
+fourDiamond = use pos >>= \p -> return $
   [def' & pos .~ p + V2 5 0,
    def' & pos .~ p + V2 15 0,
    def' & pos .~ p - V2 5 0,
