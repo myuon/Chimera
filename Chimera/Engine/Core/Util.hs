@@ -7,13 +7,15 @@ module Chimera.Engine.Core.Util (
   , (><=)
   , rot2M, rotate2
   , insertIM, insertIM', insertsIM'
+  , (<=~)
   ) where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (MonadState)
+import Control.Monad.State.Class
 import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
+infixl 5 <=~
 
 boxVertex :: Vec2 -> Vec2 -> [Vec2]
 boxVertex pos size = [pos - size,
@@ -51,3 +53,6 @@ insertIM' a m
 
 insertsIM' :: [a] -> IM.IntMap a -> IM.IntMap a
 insertsIM' as m = foldr insertIM m as
+
+(<=~) :: (MonadState s m) => Lens' s a -> (a -> m a) -> m ()
+l <=~ f = l <~ (f =<< use l)

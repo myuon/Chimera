@@ -4,7 +4,8 @@ module Chimera.Engine.Core.Types where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import CState
 import Control.Monad.Coroutine
 import qualified Data.Vector as V
 import qualified Data.Map as M
@@ -70,7 +71,7 @@ data Object = Object {
   } deriving (Eq, Show)
 
 class GUIClass c where
-  update :: (Given Resource, Given Config) => State c ()
+  update :: (Given Resource, Given Config) => StateT c Game ()
   paint :: (Given Resource) => StateT c Game ()
 
 makeLenses ''Resource

@@ -5,17 +5,16 @@ module Chimera.Engine.Core.Field where
 
 import FreeGame
 import Control.Lens
-import Control.Arrow
-import Control.Monad.State.Strict
+import CState
+import Control.Monad.Trans
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import qualified Data.IntMap as IM
+import qualified Data.IntMap.Strict as IM
 import qualified Data.Foldable as F
 import qualified Data.Traversable as T
 import Data.Reflection
 import Data.Default
 import Data.Char (digitToInt)
-import Data.Functor.Product
 
 import Chimera.Engine.Core.Util
 import Chimera.Engine.Core.Types
@@ -183,10 +182,10 @@ instance GUIClass Field where
     scanAutonomies bullets
     scanAutonomies effects
 
-    enemies %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
-    bullets %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
-    effects %= IM.filter (\p -> p^.statePiece /= Dead) . fmap (execState update)
-    player %= execState update
+    enemies <=~ T.mapM (\x -> lift . execStateT update $! x) . IM.filter (\p -> p^.statePiece /= Dead)
+    bullets <=~ T.mapM (\x -> lift . execStateT update $! x) . IM.filter (\p -> p^.statePiece /= Dead)
+    effects <=~ T.mapM (\x -> lift . execStateT update $! x) . IM.filter (\p -> p^.statePiece /= Dead)
+    player <=~ \x -> lift . execStateT update $! x
     
     where
       deadEnemyEffects = do
@@ -217,11 +216,11 @@ instance GUIClass Field where
 
       drawObj = do
         _ <- lift . execStateT paint =<< use player
-        F.mapM_ (lift . execStateT paint) =<< use bullets
-        F.mapM_ (lift . execStateT paint) =<< use enemies
+        F.mapM_ (\x -> lift . execStateT paint $! x) =<< use bullets
+        F.mapM_ (\x -> lift . execStateT paint $! x) =<< use enemies
       
       drawEffs z = do
-        F.mapM_ (lift . execStateT paint) . IM.filter (\r -> r^.zIndex == z)
+        F.mapM_ (\x -> lift . execStateT paint $! x) . IM.filter (\r -> r^.zIndex == z)
           =<< use effects
       
       debugging = do
@@ -291,12 +290,12 @@ actPlayer = do
       | a == 0 = 0
       | otherwise = a + b
 
-scanAutonomies :: Lens' Field (IM.IntMap (Component a)) -> State Field ()
+scanAutonomies :: (Monad m) => Lens' Field (IM.IntMap (Component a)) -> StateT Field m ()
 scanAutonomies member = do
   put =<< liftM2 (IM.foldrWithKey' iter) get (use member)
   put =<< liftM2 (IM.foldrWithKey' iter2) get (use member)
   where
-  iter k a f = let (at,_) = execState (a^.runAuto) (a^.auto,f) in
+  iter k a f = let (at,_) = execState (a^.runAuto) (a^.auto,f) in 
     f & member %~ IM.adjust (auto .~ at) k
 
   iter2 k a f = let (_,f') = execState (a^.runAuto) (a^.auto,f) in f'
@@ -329,7 +328,7 @@ makeBullet bk bc b = let resource = given :: Resource in b
   & size .~ (resource^.areaBullet) bk & group .~ GEnemy & statePiece .~ Alive
   & drawing .~ (bitmap $ (resource^.bulletImg) V.! (fromEnum bk) V.! (fromEnum bc))
 
-collideObj :: (Given Resource) => State Field ()
+collideObj :: (Given Resource, Monad m) => StateT Field m ()
 collideObj = do
   es <- use enemies
   bs <- use bullets
@@ -355,7 +354,7 @@ collideObj = do
         then (x & hp -~ 1 & statePiece %~ if flag == GEnemy then const Damaged else id, IM.adjust (statePiece .~ Dead) k ys)
         else (x,ys)
 
-addBullet :: (Given Resource) => State Field ()
+addBullet :: (Given Resource, Monad m) => StateT Field m ()
 addBullet = do
   keys <- use (player.keysPlayer)
   cnt <- use (player.counter)
@@ -381,9 +380,9 @@ effEnemyDead = effCommonAnimated 0
 
 effCommonAnimated :: (Given Resource) => Int -> Vec2 -> Effect
 effCommonAnimated k p = def & pos .~ p & zIndex .~ OnObject & runAuto .~ run where
+  run :: Danmaku EffectPiece ()
   run = zoom self $ do
     let resource = given :: Resource
-    f <- get
-    let i = (f^.counter) `div` (f^.slowRate)
+    i <- liftM2 div (use counter) (use slowRate)
     drawing .= (bitmap $ (resource^.effectImg) V.! k V.! i)
     when (i == V.length ((resource^.effectImg) V.! k)) $ statePiece .= Dead

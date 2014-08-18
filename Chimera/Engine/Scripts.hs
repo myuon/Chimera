@@ -12,8 +12,8 @@ module Chimera.Engine.Scripts (
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict
-import Control.Monad.Operational.Mini
+--import Control.Monad.State.Strict
+import CState
 import Control.Monad.Reader
 import Control.Monad.Coroutine
 import Data.Monoid ((<>))

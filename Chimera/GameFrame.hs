@@ -3,7 +3,9 @@ module Chimera.GameFrame (game) where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import CState
+import Control.Monad.Trans
 import Control.Monad.Reader
 import Data.Maybe (isJust)
 import Data.Default (def)
@@ -62,8 +64,8 @@ stgloop = do
   _ <- use field >>= lift . execStateT paint
   field.player `zoom` actPlayer
   use controller >>= \c -> when (isShooting c) $ 
-    field %= execState addBullet
-  field %= execState update
+    field <=~ lift . execStateT addBullet
+  field <=~ lift . execStateT update
 
   use controller >>= \r -> case isShooting r of 
     True -> stageLoop
@@ -74,7 +76,7 @@ talkloop = do
   stgloop
 
   _ <- use mEngine >>= lift . execStateT paint
-  mEngine %= execState update
+  mEngine <=~ lift . execStateT update
 
   use (mEngine.stateEngine) >>= \s -> do
     when (s == End) $ do
@@ -136,5 +138,5 @@ game = do
       join $ use running
     
       keyPress KeyEscape >>= \k -> when k $ quit .= True
-      tick
+      lift $ tick
       use quit >>= \q -> unless q mainloop

@@ -12,7 +12,9 @@ import Control.Lens
 import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
 import Data.List (unfoldr)
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import CState
+import Control.Monad.Trans
 import Data.Reflection (given)
 
 import Chimera.Engine.Core.Types
@@ -92,7 +94,7 @@ instance Default MessageEngine where
 
 instance HasLayer MessageEngine where layer = layerMessageEngine
 
-runToken :: Token -> State MessageEngine ()
+runToken :: (Monad m) => Token -> StateT MessageEngine m ()
 runToken (Text u) = do
   cursor .= 0
   printing <~ liftM (overflow u . (^.size)) (use layerMessageEngine)
@@ -107,7 +109,7 @@ runToken (Text u) = do
 
 runToken (ClickWait) = stateEngine .= Waiting
 
-runExpr :: Expr -> State MessageEngine ()
+runExpr :: (Monad m) => Expr -> StateT MessageEngine m ()
 runExpr Empty = return ()
 runExpr (t :+: es) = do
   runToken t

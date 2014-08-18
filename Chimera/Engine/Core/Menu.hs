@@ -4,7 +4,8 @@ module Chimera.Engine.Core.Menu where
 import FreeGame
 import Control.Lens
 import Data.Default
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import CState
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.Foldable as F

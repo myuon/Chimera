@@ -3,12 +3,13 @@ module Chimera.Scripts.Common where
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict
+--import Control.Monad.State.Strict
+import CState
+import Control.Monad.Trans
 import Data.Default (def)
 import qualified Data.Vector as V
 import qualified Data.IntMap as IM
 import Data.Reflection (Given, given)
-import Debug.Trace as T
 
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
