@@ -5,7 +5,6 @@ import FreeGame
 import Control.Lens
 import qualified Data.Vector as V
 import qualified Data.Map as M
-import qualified Data.Sequence as S
 import Data.Reflection
 import Data.Default
 

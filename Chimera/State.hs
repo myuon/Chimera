@@ -1,14 +1,15 @@
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses, RankNTypes #-}
 {-# LANGUAGE TypeFamilies, ImpredicativeTypes #-}
-module CState (
+module Chimera.State (
   StateT(..), State(..),
   execStateT, evalStateT, runStateT,
   execState, evalState, runState,
-  get, put, state, modify
+  get, put, state, modify,
+  lift
   ) where
 
 import Control.Applicative
-import Control.Monad.State.Class (MonadState(..), modify)
+import Control.Monad.State.Class (MonadState(..))
 import Control.Monad.Trans
 import Data.Functor.Identity
 import Control.Lens
@@ -34,6 +35,9 @@ instance MonadState s (StateT s m) where
   get = state $ \s -> (s, s)
   put s = state $ \_ -> ((), s)
   state f = StateT $ \s h -> uncurry h (f s)
+
+modify :: (Monad m) => (s -> s) -> StateT s m ()
+modify f = get >>= \s -> put $! f s
 
 instance MonadTrans (StateT s) where
   lift m = StateT $ \s h -> m >>= \a -> h a s

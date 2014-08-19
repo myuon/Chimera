@@ -4,7 +4,6 @@
 module Chimera.Engine.Core.Util (
   boxVertex, boxVertexRotated
   , cutIntoN
-  , (><=)
   , rot2M, rotate2
   , insertIM, insertIM', insertsIM'
   , (<=~)
@@ -13,7 +12,6 @@ module Chimera.Engine.Core.Util (
 import FreeGame
 import Control.Lens
 import Control.Monad.State.Class
-import qualified Data.Sequence as S
 import qualified Data.IntMap.Strict as IM
 infixl 5 <=~
 
@@ -30,10 +28,6 @@ boxVertexRotated pos size ang =
 cutIntoN :: Int -> Bitmap -> [Bitmap]
 cutIntoN n img = let (w,h) = bitmapSize img; w1 = w `div` n in
   [cropBitmap img (w1,h) (w1*i,0) | i <- [0..n-1]]
-
-(><=) :: (MonadState s m) => 
-         Setting (->) s s (S.Seq a) (S.Seq a) -> (S.Seq a) -> m ()
-a ><= b = a %= (S.>< b)
 
 rot2M :: Double -> M22 Double
 rot2M r = let c = cos(-r); s = sin(-r) in 

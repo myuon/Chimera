@@ -6,11 +6,10 @@ module Chimera.Scripts.Stage1 (
 
 import FreeGame
 import Control.Lens
-import Control.Monad.State.Strict (modify)
-import Control.Monad.Trans (lift)
 import Data.Default (def)
-import Data.Reflection (Given, given)
+import Data.Reflection
 
+import Chimera.State
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
 import Chimera.Scripts.Common
@@ -54,6 +53,7 @@ stage1 = do
   
   wait 20
   
+  keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss3
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss2
   keeper $ initEnemy (V2 240 (-40)) 100 & runAuto .~ boss1
 
@@ -114,7 +114,6 @@ boss2 = do
   
   e <- use self
   zoom _1 $ motionCommon 100 Stay
-  p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $
     mapM_ enemyEffect $ [
@@ -152,7 +151,6 @@ boss3 = do
 
   e <- use self
   zoom _1 $ motionCommon 100 Stay
-  p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
     enemyEffect $ effEnemyAttack 0 (e^.pos)
@@ -188,7 +186,6 @@ boss4 = do
 
   e <- use self
   zoom _1 $ motionCommon 100 Stay
-  p <- getPlayer
   ang' <- anglePlayer
   when (e^.counter == 150) $ do
     enemyEffect $ effEnemyAttack 0 (e^.pos)

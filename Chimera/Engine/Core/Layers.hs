@@ -12,13 +12,10 @@ import Control.Lens
 import Data.Default
 import Data.Monoid (Monoid, mempty, mappend, (<>))
 import Data.List (unfoldr)
---import Control.Monad.State.Strict
-import CState
-import Control.Monad.Trans
 import Data.Reflection (given)
 
+import Chimera.State
 import Chimera.Engine.Core.Types
-import Chimera.Engine.Core.Util
 
 data Layer = Layer {
   _objLayer :: Object,

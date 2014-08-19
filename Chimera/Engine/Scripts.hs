@@ -12,15 +12,12 @@ module Chimera.Engine.Scripts (
 
 import FreeGame
 import Control.Lens
---import Control.Monad.State.Strict
-import CState
 import Control.Monad.Reader
 import Control.Monad.Coroutine
 import Data.Monoid ((<>))
 import qualified Data.IntMap.Strict as IM
-import qualified Data.Foldable as F
-import Data.Reflection (Given, given)
 
+import Chimera.State
 import Chimera.Engine.Core
 
 data Controller = Wait Int | Stop | Go | Speak Expr | Talk deriving (Eq, Show)
@@ -120,12 +117,12 @@ moveSmooth :: (HasObject a) =>
               Vec2 -> Int -> Autonomie (Danmaku a) a -> Autonomie (Danmaku a) a
 moveSmooth v time a = a & runAuto %~ (>> go) where
   go = zoom _1 $ do
-    let ang = pi / fromIntegral time
+    let k = pi / fromIntegral time
     c' <- use counter
     let c = c' - (a^.auto^.counter)
     when (0 <= c && c <= time) $ do
-      let t = ang * (fromIntegral $ c)
-      pos += ((ang * 0.5 * sin t) *^ v)
+      let t = k * (fromIntegral $ c)
+      pos += ((k * 0.5 * sin t) *^ v)
 
 effColored :: (Float -> Color) -> State EffectPiece () -> Int -> Effect -> Effect
 effColored f g time e = e & runAuto %~ (>> go) where

@@ -6,13 +6,11 @@ module Chimera.Scripts.Stage2 (
 
 import FreeGame
 import Control.Lens
-import Control.Arrow
-import Control.Monad.Trans (lift)
 import Data.Default (def)
 import Data.Reflection (Given, given)
 import qualified Data.Map as M
-import Debug.Trace as Trace
 
+import Chimera.State
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
 import Chimera.Scripts.Common
@@ -53,7 +51,7 @@ gameOfLife = do
   s <- use self
   when (s^.counter == 130) $ enemyEffect $ effGrid
   when (s^.counter `mod` 100 == 0 && s^.counter >= 300) $ do
-    let b = (iterate step $ lineBoard w' h') !! ((s^.counter - 300) `div` 100)
+    let b = (iterate step $ lineBoard) !! ((s^.counter - 300) `div` 100)
     shots $ flip fmap (M.toList $ M.filter id b) $ \((x,y),_) ->
       makeBullet BallTiny Green def
         & pos .~ (fromIntegral $ n`div`2) + V2 (fromIntegral $ x*n) (fromIntegral $ y*n)
@@ -67,7 +65,6 @@ gameOfLife = do
     intv = 4
     V2 w h = (\(Box x y) -> fmap abs $ x-y) $ (given :: Config)^.validArea
     tl (Box x _) = x
-    centerX = fromIntegral $ (n`div`2) + n*(truncate w)`div`n`div`2
     w' = truncate w `div` n
     h' = truncate h `div` n
 
@@ -89,8 +86,8 @@ gameOfLife = do
               lx $ fromIntegral $ c*intv
               ly $ fromIntegral $ c*intv
 
-    lineBoard :: Int -> Int -> Board Bool
-    lineBoard w h = M.fromList [((x,y),f (x,y))|x<-[0..w'-1], y<-[0..h'+100]] where
+    lineBoard :: Board Bool
+    lineBoard = M.fromList [((x,y),f (x,y))|x<-[0..w'-1], y<-[0..h'+100]] where
       f (x,y)
         | x == w' `div` 2 && y >= 3 = True
         | otherwise = False

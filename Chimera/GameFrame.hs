@@ -3,16 +3,13 @@ module Chimera.GameFrame (game) where
 
 import FreeGame
 import Control.Lens
---import Control.Monad.State.Strict
-import CState
-import Control.Monad.Trans
 import Control.Monad.Reader
 import Data.Maybe (isJust)
 import Data.Default (def)
 import qualified Data.Vector as V
 import Data.Reflection (Given, give, given)
-import Data.Functor.Product
 
+import Chimera.State
 import Chimera.Engine.Core
 import Chimera.Engine.Scripts
 import Chimera.Config
@@ -62,9 +59,8 @@ maploop bmp = do
 stgloop :: (Given Resource, Given Config) => GameLoop ()
 stgloop = do
   _ <- use field >>= lift . execStateT paint
-  field.player `zoom` actPlayer
-  use controller >>= \c -> when (isShooting c) $ 
-    field <=~ lift . execStateT addBullet
+--  use controller >>= \c -> when (isShooting c) $ 
+--    field <=~ lift . execStateT addBullet
   field <=~ lift . execStateT update
 
   use controller >>= \r -> case isShooting r of 
@@ -107,7 +103,7 @@ talkloop = do
 game :: IO ()
 game = do
   c <- loadConfig
-  runGame (c^.windowMode) (c^.windowSize) $ do
+  void $ runGame (c^.windowMode) (c^.windowSize) $ do
     setFPS 60
     setTitle (c^.titleName)
     clearColor $ Color 0 0 0.2 1.0
@@ -124,7 +120,6 @@ game = do
         _running = menuloop,
         _quit = False,
         _memory = (s^.defMemory) }
-  return ()
 
   where
     menuItems :: (Given Config, Given Resource) => Bitmap -> V.Vector (Item GameLoop)

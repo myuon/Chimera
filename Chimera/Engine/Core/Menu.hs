@@ -4,13 +4,11 @@ module Chimera.Engine.Core.Menu where
 import FreeGame
 import Control.Lens
 import Data.Default
---import Control.Monad.State.Strict
-import CState
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.Foldable as F
 
-import Chimera.Engine.Core.Util
+import Chimera.State
 
 data Item m = Item {
   _caption :: String,

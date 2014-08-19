@@ -1,12 +1,11 @@
 {-# LANGUAGE TemplateHaskell, Rank2Types, FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
-{-# LANGUAGE UndecidableInstances, ConstraintKinds #-}
+{-# LANGUAGE UndecidableInstances, ConstraintKinds, MultiWayIf #-}
 module Chimera.Engine.Core.Field where
 
 import FreeGame
+import FreeGame.Class (ButtonState(..))
 import Control.Lens
-import CState
-import Control.Monad.Trans
 import qualified Data.Vector as V
 import qualified Data.Map as M
 import qualified Data.IntMap.Strict as IM
@@ -16,6 +15,7 @@ import Data.Reflection
 import Data.Default
 import Data.Char (digitToInt)
 
+import Chimera.State
 import Chimera.Engine.Core.Util
 import Chimera.Engine.Core.Types
 
@@ -45,10 +45,10 @@ data Chara = Chara {
 
 data Player = Player {
   _charaPlayer :: Chara,
-  _keysPlayer :: M.Map Key Int,
   _shotZ :: (Given Resource) => State Chara [Bullet],
   _shotX :: (Given Resource) => State Chara [Bullet],
-  _bombCount :: Int
+  _bombCount :: Int,
+  _cshots :: [Bullet]
   }
 
 data Field = Field {
@@ -110,14 +110,14 @@ instance Default Player where
       size .~ V2 5 5 $
       hp .~ 10 $
       def,
-    _keysPlayer = M.fromList $ zip keyList [0..],
     _shotZ = error "uninitialized shotZ",
     _shotX = error "uninitialized shotX",
-    _bombCount = error "uninitialized bombCount"
+    _bombCount = error "uninitialized bombCount",
+    _cshots = []
     }
 
 instance Default Field where
-  def = Field def IM.empty IM.empty IM.empty 0 False "" []
+  def = Field def IM.empty IM.empty IM.empty 0 False "" [] where
 
 instance GUIClass Player where
   update = do
@@ -126,17 +126,34 @@ instance GUIClass Player where
     spXY .= 0
     pos %= clamp
 
-    spXY <~ liftM2 (\s k -> case k M.! KeyLeftShift > 0 || k M.! KeyRightShift > 0 of
-        True -> ((0.5 * s) *^ dir k)
-        False -> s *^ dir k) (use speed) (use keysPlayer)
+    dir <- keyStates_ >>= \keys -> return $ sum $ [v | (k,v) <-
+        [(KeyUp, V2 0 (-1)),(KeyDown, V2 0 1),(KeyRight,V2 1 0),(KeyLeft,V2 (-1) 0)],
+        case keys M.! k of Press -> True; _ -> False]
+    shift <- (||) <$> keyPress KeyLeftShift <*> keyPress KeyRightShift
+    s <- use speed
+    spXY .= case shift of
+      True -> (0.5 * s) *^ (dir :: Vec2)
+      False -> s *^ dir
+    addBullet
 
     where
-      dir :: M.Map Key Int -> Vec2
-      dir k = let addTup b p q = bool q (uncurry V2 p+q) b in
-        addTup (k M.! KeyUp    > 0) (0,-1) $
-        addTup (k M.! KeyDown  > 0) (0,1) $
-        addTup (k M.! KeyRight > 0) (1,0) $
-        addTup (k M.! KeyLeft  > 0) (-1,0) $ 0
+      addBullet = do
+        cnt <- use counter
+        cshots .= []
+
+        z <- keyPress (charToKey 'Z')
+        when (z && cnt `mod` 10 == 0) $ do
+          s <- use shotZ
+          p <- use charaPlayer
+          cshots .= evalState s p
+
+        n <- use bombCount
+        x <- keyPress (charToKey 'X')
+        when (x && cnt `mod` 20 == 0 && n > 0) $ do
+          s <- use shotX
+          p <- use charaPlayer
+          cshots .= evalState s p
+          bombCount -= 1
 
   paint = do
     p <- get
@@ -186,6 +203,8 @@ instance GUIClass Field where
     bullets <=~ T.mapM (\x -> lift . execStateT update $! x) . IM.filter (\p -> p^.statePiece /= Dead)
     effects <=~ T.mapM (\x -> lift . execStateT update $! x) . IM.filter (\p -> p^.statePiece /= Dead)
     player <=~ \x -> lift . execStateT update $! x
+    cs <- use (player.cshots)
+    bullets %= insertsIM' cs
     
     where
       deadEnemyEffects = do
@@ -263,11 +282,6 @@ instance GUIClass Field where
       drawTitle = do
         translate (V2 40 30) . text (resource^.font) 10 =<< use danmakuTitle
 
-keyList :: [Key]
-keyList = [
-  KeyUp, KeyDown, KeyRight, KeyLeft, KeyLeftShift, KeyRightShift,
-  charToKey 'Z', charToKey 'X']
-
 clamp :: (Given Config) => Vec2 -> Vec2
 clamp (V2 x y) = V2 (edgeX x) (edgeY y)
   where
@@ -281,24 +295,15 @@ clamp (V2 x y) = V2 (edgeX x) (edgeY y)
     edgeY = (\p -> bool p areaTop (p < areaTop)) .
             (\p -> bool p areaBottom (p > areaBottom))
 
-actPlayer :: StateT Player Game ()
-actPlayer = do
-  pairs <- lift $ mapM (\k -> (,) k `fmap` fromEnum `fmap` keyPress k) keyList
-  keysPlayer %= M.unionWith go (M.fromList pairs)
-  where
-    go a b
-      | a == 0 = 0
-      | otherwise = a + b
-
 scanAutonomies :: (Monad m) => Lens' Field (IM.IntMap (Component a)) -> StateT Field m ()
 scanAutonomies member = do
   put =<< liftM2 (IM.foldrWithKey' iter) get (use member)
-  put =<< liftM2 (IM.foldrWithKey' iter2) get (use member)
+  put =<< liftM2 (IM.foldr' iter2) get (use member)
   where
-  iter k a f = let (at,_) = execState (a^.runAuto) (a^.auto,f) in 
-    f & member %~ IM.adjust (auto .~ at) k
+    iter k a f = let (aut,_) = execState (a^.runAuto) (a^.auto,f) in 
+      f & member %~ IM.adjust (auto .~ aut) k
 
-  iter2 k a f = let (_,f') = execState (a^.runAuto) (a^.auto,f) in f'
+    iter2 a f = let (_,f') = execState (a^.runAuto) (a^.auto,f) in f'
 
 collide :: (HasObject c, HasObject b) => c -> b -> Bool
 collide oc ob = let oc' = extend oc; ob' = extend ob; in
@@ -344,7 +349,7 @@ collideObj = do
     collides :: (EnemyLike e) =>
                 GroupFlag -> IM.IntMap e -> IM.IntMap Bullet -> (IM.IntMap e, IM.IntMap Bullet)
     collides flag es bs = IM.foldrWithKey' f (es,bs) es where
-      f k e (xs,ys) = let (e',ys') = collideTo flag e ys in (IM.insert k (hpCheck e') es,ys')
+      f k e (xs,ys) = let (e',ys') = collideTo flag e ys in (IM.insert k (hpCheck e') xs,ys')
       hpCheck x = if (x^.hp) <= 0 then x & statePiece .~ Dead else x
 
     collideTo :: (EnemyLike e) =>
@@ -353,22 +358,6 @@ collideObj = do
       f k b (x,ys) = if (b^.group) == flag && collide e b
         then (x & hp -~ 1 & statePiece %~ if flag == GEnemy then const Damaged else id, IM.adjust (statePiece .~ Dead) k ys)
         else (x,ys)
-
-addBullet :: (Given Resource, Monad m) => StateT Field m ()
-addBullet = do
-  keys <- use (player.keysPlayer)
-  cnt <- use (player.counter)
-  when (keys M.! charToKey 'Z' > 0 && cnt `mod` 10 == 0) $ do
-    s <- use (player.shotZ)
-    p <- use (player.charaPlayer)
-    bullets %= insertsIM' (evalState s p)
-
-  n <- use (player.bombCount)
-  when (keys M.! charToKey 'X' > 0 && cnt `mod` 20 == 0 && n > 0) $ do
-    s <- use (player.shotX)
-    p <- use (player.charaPlayer)
-    bullets %= insertsIM' (evalState s p)
-    zoom player $ bombCount -= 1
 
 effPlayerDead :: (Given Resource) => Vec2 -> Effect
 effPlayerDead = go . effCommonAnimated 1 where
